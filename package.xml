@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>experiment_nav2</name>
+  <version>0.1.0</version>
+  <description>Nav2 integration assets for the DDSM115 differential-drive experiment robot.</description>
+  <maintainer email="todo@example.com">experiment_nav2 maintainer</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>ddsm115_controller</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>nav2_common</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>zed_description</exec_depend>
+
+  <export><build_type>ament_cmake</build_type></export>
+</package>
