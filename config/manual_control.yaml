@@ -4,10 +4,11 @@ curvature_teleop:
   ros__parameters:
     update_period: 0.02
     joystick_timeout: 0.5
-    joystick_deadzone: 0.03
+    joystick_deadzone: 0.02
+    curvature_deadzone: 0.05
     normal_max_linear_speed: 1.0      # m/s
     high_max_linear_speed: 1.666667   # 6 km/h
-    maximum_curvature: 0.8            # 1/m; minimum nominal turn radius is 1.25 m
+    maximum_curvature: 1.1            # 1/m; minimum nominal turn radius is 0.91 m
 
 velocity_smoother:
   ros__parameters:
@@ -15,10 +16,10 @@ velocity_smoother:
     smoothing_frequency: 50.0
     scale_velocities: True
     feedback: "OPEN_LOOP"
-    max_velocity: [1.666667, 0.0, 0.9]
-    min_velocity: [-1.666667, 0.0, -0.9]
-    max_accel: [0.5, 0.0, 0.8]
-    max_decel: [-0.8, 0.0, -1.5]
+    max_velocity: [1.666667, 0.0, 1.0]
+    min_velocity: [-1.666667, 0.0, -1.0]
+    max_accel: [0.5, 0.0, 1.2]
+    max_decel: [-0.8, 0.0, -2.0]
     odom_topic: "/odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
