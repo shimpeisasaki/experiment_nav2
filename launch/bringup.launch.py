@@ -13,6 +13,7 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     share = FindPackageShare('experiment_nav2')
     robot_config = LaunchConfiguration('robot_config')
+    manual_config = LaunchConfiguration('manual_config')
     model = PathJoinSubstitution([share, 'urdf', 'experiment_robot.urdf.xacro'])
     return LaunchDescription([
         DeclareLaunchArgument('use_base', default_value='true', choices=['true', 'false']),
@@ -22,6 +23,8 @@ def generate_launch_description():
         DeclareLaunchArgument('serial_number', default_value='0'),
         DeclareLaunchArgument('robot_config', default_value=PathJoinSubstitution([
             share, 'config', 'robot_nav2.yaml'])),
+        DeclareLaunchArgument('manual_config', default_value=PathJoinSubstitution([
+            share, 'config', 'manual_control.yaml'])),
         DeclareLaunchArgument('zed_config', default_value=PathJoinSubstitution([
             share, 'config', 'zed_sensors.yaml'])),
         Node(package='robot_state_publisher', executable='robot_state_publisher',
@@ -33,10 +36,21 @@ def generate_launch_description():
         Node(package='ddsm115_controller', executable='two_wheels_robot',
              name='two_wheels_robot_node',
              parameters=[robot_config, {
-                 'enable_joystick': LaunchConfiguration('enable_joystick'),
+                 'enable_joystick': False,
                  'pub_tf': True}],
              output='screen', condition=IfCondition(LaunchConfiguration('use_base'))),
         Node(package='joy', executable='joy_node', name='joy_node', output='screen',
+             condition=IfCondition(LaunchConfiguration('enable_joystick'))),
+        Node(package='ddsm115_controller', executable='curvature_teleop',
+             name='curvature_teleop', parameters=[manual_config], output='screen',
+             condition=IfCondition(LaunchConfiguration('enable_joystick'))),
+        Node(package='nav2_velocity_smoother', executable='velocity_smoother',
+             name='velocity_smoother', parameters=[manual_config], output='screen',
+             remappings=[('cmd_vel', 'cmd_vel_teleop'), ('cmd_vel_smoothed', 'cmd_vel')],
+             condition=IfCondition(LaunchConfiguration('enable_joystick'))),
+        Node(package='nav2_lifecycle_manager', executable='lifecycle_manager',
+             name='manual_velocity_smoother_lifecycle_manager', output='screen',
+             parameters=[{'autostart': True, 'node_names': ['velocity_smoother']}],
              condition=IfCondition(LaunchConfiguration('enable_joystick'))),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([

@@ -41,10 +41,12 @@ avoid duplicate drivers and TF publishers. Use `use_base:=false` for camera-only
 inspection, `use_zed:=false` for base-only inspection, or `rviz:=false` for headless
 operation. `robot_config`, `zed_config`, and `serial_number` can be overridden.
 
-For manual driving, append `enable_joystick:=true`. The analog right stick alone controls the base
-(vertical: forward/reverse, horizontal: turning); diagonal input traces an arc. `X` selects normal
-drive (4 km/h), `A` selects high drive (6 km/h), `B` brakes, and `Y` selects freewheel. Acceleration,
-deceleration, and speed limits are parameters in `config/robot_nav2.yaml`.
+For manual driving, append `enable_joystick:=true`. The analog right stick controls curvature drive:
+vertical sets forward/reverse speed while horizontal sets the curvature of the path. Normal driving
+therefore produces arcs rather than pivot turns. `X` selects normal drive (1.0 m/s), `A` selects high
+drive (6 km/h), `B` brakes, and `Y` selects freewheel. The joystick publishes `/cmd_vel_teleop`; the
+open-loop Nav2 velocity smoother publishes the final `/cmd_vel`. Tune these parameters in
+`config/manual_control.yaml`.
 
 Wheel geometry is radius 0.050 m / track 0.208 m in the experiment config, the
 DDSM115 shared GUI config, and the URDF. Change all three together when calibrating.
