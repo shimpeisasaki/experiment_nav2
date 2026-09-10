@@ -24,7 +24,64 @@ is at (-0.345, 0, 0.125) m, with 35 mm trail and a 100 mm diameter,
 The fork geometry is not modeled; the conservative footprint remains provisional.
 The chassis underside is at 50 mm and its thickness is 140 mm (top: 190 mm).
 
-## Safety and ownership
+## Sensor inspection bringup (no GNSS, no EKF)
+
+```bash
+cd ~/ros2_ws
+source /opt/ros/humble/setup.bash
+colcon build --packages-select ddsm115_controller experiment_nav2 --symlink-install
+source install/setup.bash
+ros2 launch experiment_nav2 bringup.launch.py
+```
+
+This starts the motor driver, wheel odometry, robot_state_publisher, ZED Mini,
+and RViz. It does not start Nav2 or send velocity commands, but the base accepts
+external `/cmd_vel` commands. Stop other base/visualization launches first to
+avoid duplicate drivers and TF publishers. Use `use_base:=false` for camera-only
+inspection, `use_zed:=false` for base-only inspection, or `rviz:=false` for headless
+operation. `robot_config`, `zed_config`, and `serial_number` can be overridden.
+
+For manual driving, append `enable_joystick:=true`. The analog right stick alone controls the base
+(vertical: forward/reverse, horizontal: turning); diagonal input traces an arc. `X` selects normal
+drive (4 km/h), `A` selects high drive (6 km/h), `B` brakes, and `Y` selects freewheel. Acceleration,
+deceleration, and speed limits are parameters in `config/robot_nav2.yaml`.
+
+Wheel geometry is radius 0.050 m / track 0.208 m in the experiment config, the
+DDSM115 shared GUI config, and the URDF. Change all three together when calibrating.
+
+The wheel node owns `odom -> base_link`; robot_state_publisher owns the camera
+mount and internal lens transforms. ZED supplies its calibrated lens-to-IMU TF
+(`publish_imu_tf=true`, IPC disabled), but no odometry/map TF. GNSS is excluded.
+
+Inspect the actual topic names and messages:
+
+```bash
+ros2 topic list -t
+ros2 topic echo /odom --once
+ros2 topic echo /zed/zed_node/odom --once
+ros2 topic hz /zed/zed_node/point_cloud/cloud_registered
+ros2 param get /two_wheels_robot_node wheel_base
+ros2 param get /two_wheels_robot_node R_wheel
+ros2 run tf2_ros tf2_echo base_link zed_camera_link
+ros2 run tf2_ros tf2_echo base_link zed_imu_link
+```
+
+ZED publishes some streams only with subscribers. Wheel odometry is in `odom`,
+while VIO is in independent `zed_odom`/`zed_map` coordinates. There is deliberately
+no invented static alignment between those origins. Compare relative motion
+or align recorded trajectories before overlaying them. RViz defaults to
+`base_link` for geometry/cloud inspection; change Fixed Frame to `odom` to view
+wheel motion. ZED odometry can be inspected numerically/recorded at this stage.
+
+EKF is the next stage after checking direction, timestamps, covariance, VIO
+tracking quality and wheel scale. Fuse selected wheel velocity and VIO pose
+components, accounting for the camera offset and independent initial origin.
+VIO already uses the ZED IMU: do not assume the VIO and same IMU orientation are
+independent measurements. When introducing EKF, disable wheel TF and give EKF
+sole ownership of `odom -> base_link`. `map -> odom` is not needed for this
+sensor-inspection bringup.
+
+## Navigation TF ownership
 
 `robot_nav2.yaml` disables joystick control and the base is the only publisher
 of `odom -> base_link`.  The localization stack must be the only publisher of
@@ -57,8 +114,8 @@ pipeline.
 
 ## Required calibration before autonomous motion
 
-1. Measure chassis footprint/radius and replace `robot_radius` in
-   `config/nav2_params.yaml`.
+1. Verify the provisional `footprint` in `config/nav2_params.yaml` against the
+   full physical envelope including the caster fork.
 2. Measure the ZED mounting pose and publish its static TF from `base_link`.
 3. Verify `ros2 run tf2_tools view_frames` has one connected tree:
    `map -> odom -> base_link -> zed_*`.
