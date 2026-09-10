@@ -48,6 +48,43 @@ drive (6 km/h), `B` brakes, and `Y` selects freewheel. The joystick publishes `/
 open-loop Nav2 velocity smoother publishes the final `/cmd_vel`. Tune these parameters in
 `config/manual_control.yaml`.
 
+## Wheel-odometry calibration tests
+
+Stop the manual bringup and Nav2 before running a test; this launch is the sole publisher of
+`/cmd_vel`. It starts the base, a fixed-command publisher, the same Nav2 velocity smoother used by
+manual driving, the ZED Mini VIO, and rosbag recording. Both the pre-smoother `/cmd_vel_test` and final
+`/cmd_vel`, wheel `/odom`, and ZED `/zed/zed_node/odom` are recorded, so acceleration and deceleration
+are included in the analysis. Motor online/error/current/temperature diagnostics are also recorded.
+After a finite-duration test, the publisher holds zero for one second and the launch automatically
+stops the rosbag and base. Pass `use_zed:=false` only for a base-only diagnostic.
+
+```bash
+# Straight test: 0.3 m/s target for 10 s (measure the actual total travel).
+ros2 launch experiment_nav2 odom_calibration.launch.py bag_name:=straight_01
+
+# Left/right arcs: 1 m target radius before velocity smoothing.
+ros2 launch experiment_nav2 odom_calibration.launch.py \
+  angular_speed:=0.3 bag_name:=arc_left_01
+ros2 launch experiment_nav2 odom_calibration.launch.py \
+  angular_speed:=-0.3 bag_name:=arc_right_01
+
+# One nominal in-place revolution at 0.5 rad/s
+ros2 launch experiment_nav2 odom_calibration.launch.py \
+  linear_speed:=0.0 angular_speed:=0.5 duration:=12.57 bag_name:=spin_left_01
+
+# Hand-push inspection: in another terminal, first enable freewheel with the service below.
+ros2 launch experiment_nav2 odom_calibration.launch.py \
+  linear_speed:=0.0 angular_speed:=0.0 duration:=0 bag_name:=hand_push_01
+
+# In a second terminal, after the launch starts:
+ros2 service call /ddsm115/set_freewheel std_srvs/srv/SetBool "{data: true}"
+# Push by hand, then restore velocity mode before stopping the launch:
+ros2 service call /ddsm115/set_freewheel std_srvs/srv/SetBool "{data: false}"
+```
+
+Record the measured distance for the straight test, and the measured radius/yaw for each arc or
+spin. The bag includes commands, wheel RPM feedback, wheel odometry, and TF for later comparison.
+
 Wheel geometry is radius 0.050 m / track 0.208 m in the experiment config, the
 DDSM115 shared GUI config, and the URDF. Change all three together when calibrating.
 

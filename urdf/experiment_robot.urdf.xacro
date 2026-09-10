@@ -27,14 +27,15 @@
   <xacro:macro name="drive_wheel" params="side y">
     <link name="${side}_wheel_link">
       <visual>
-        <origin xyz="0 0 ${wheel_radius}" rpy="1.57079632679 0 0"/>
+        <!-- The wheel link origin is its axle center. -->
+        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
         <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
         <material name="wheel_black"/>
       </visual>
     </link>
     <joint name="${side}_wheel_joint" type="fixed">
       <parent link="base_link"/><child link="${side}_wheel_link"/>
-      <origin xyz="0 ${y} 0" rpy="0 0 0"/>
+      <origin xyz="0 ${y} ${wheel_radius}" rpy="0 0 0"/>
     </joint>
   </xacro:macro>
   <xacro:drive_wheel side="left" y="${track_width/2}"/>
