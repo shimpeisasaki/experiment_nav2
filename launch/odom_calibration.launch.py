@@ -65,7 +65,7 @@ def generate_launch_description():
              parameters=[robot_config, {
                  'left_usb_dev': LaunchConfiguration('left_usb_dev'),
                  'right_usb_dev': LaunchConfiguration('right_usb_dev'),
-             }],
+             }], respawn=True, respawn_delay=2.0,
              output='screen'),
         Node(package='ddsm115_controller', executable='two_wheels_robot',
              name='two_wheels_robot_node',

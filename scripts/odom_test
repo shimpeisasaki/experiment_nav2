@@ -13,6 +13,7 @@ def profile(test):
     # distance (m) or angle (rad), peak rate, acceleration, linear/angular ratio
     return {
         'straight': (3.0, 0.2, 0.15, 1.0, 0.0),
+        'straight_12m': (12.0, 0.2, 0.15, 1.0, 0.0),
         'left_arc': (math.pi, 0.2, 0.15, 1.0, 1.0),
         'right_arc': (math.pi, 0.2, 0.15, 1.0, -1.0),
         'spin': (2.0 * math.pi, 0.3, 0.3, 0.0, 1.0),

@@ -46,7 +46,7 @@ def setup(context):
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('test', default_value='straight',
-                              choices=['straight', 'left_arc', 'right_arc', 'spin']),
+                              choices=['straight', 'straight_12m', 'left_arc', 'right_arc', 'spin']),
         DeclareLaunchArgument('bag_name', default_value='',
                               description='Default: unique timestamped bag in current directory'),
         DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),

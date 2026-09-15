@@ -43,7 +43,8 @@ def setup(context):
         recorder,
         Node(package='ddsm115_controller', executable='velocity_control',
              name='velocity_control_node', output='screen',
-             parameters=[LaunchConfiguration('robot_config')]),
+             parameters=[LaunchConfiguration('robot_config')],
+             respawn=True, respawn_delay=2.0),
         test,
     ]
 

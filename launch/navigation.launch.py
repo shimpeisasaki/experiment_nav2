@@ -50,7 +50,8 @@ def generate_launch_description():
                 Command(['xacro ', model]), value_type=str)}]),
         Node(
             package='ddsm115_controller', executable='velocity_control',
-            name='velocity_control_node', output='screen', parameters=[robot_config]),
+            name='velocity_control_node', output='screen', parameters=[robot_config],
+            respawn=True, respawn_delay=2.0),
         Node(
             package='ddsm115_controller', executable='two_wheels_robot',
             name='two_wheels_robot_node', output='screen',

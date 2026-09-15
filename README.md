@@ -106,14 +106,16 @@ started. Motors must be in drive mode, with wheels on the ground.
 
 ```bash
 ros2 launch experiment_nav2 odom_tests.launch.py test:=straight
+ros2 launch experiment_nav2 odom_tests.launch.py test:=straight_12m
 ros2 launch experiment_nav2 odom_tests.launch.py test:=left_arc
 ros2 launch experiment_nav2 odom_tests.launch.py test:=right_arc
 ros2 launch experiment_nav2 odom_tests.launch.py test:=spin
 ```
 
-Run separately, measuring and repositioning between tests. Straight is 3 m at
-0.2 m/s; arcs are radius 1 m, 180 degrees at 0.2 m/s; spin is counterclockwise
-360 degrees at 0.3 rad/s. Left is positive yaw when viewed from above. Linear
+Run separately, measuring and repositioning between tests. `straight` is 3 m
+and `straight_12m` is 12 m, both at 0.2 m/s; arcs are radius 1 m, 180 degrees
+at 0.2 m/s; spin is counterclockwise 360 degrees at 0.3 rad/s. Left is positive
+yaw when viewed from above. Linear
 acceleration/deceleration is 0.15 m/s²; spin acceleration is 0.3 rad/s². A
 trapezoidal command profile includes ramps in the total requested distance/angle.
 There is no additional velocity smoother in this launch. Discrete timing and
@@ -167,8 +169,38 @@ The four-channel RS485 converter maps the forward-facing left wheel to CH4 / mot
 the right wheel to CH3 / motor ID 1. The defaults use stable `/dev/serial/by-id/` paths. Override
 both `left_usb_dev` and `right_usb_dev` together only when using a different converter.
 
-Wheel geometry is radius 0.050 m / track 0.208 m in the experiment config, the
-DDSM115 shared GUI config, and the URDF. Change all three together when calibrating.
+The physical tire radius is 0.050 m and track is 0.208 m. `R_wheel` is the
+effective rolling radius used for velocity conversion; it is calibrated to
+0.05065 m from ground tests and must match in the experiment and DDSM115 GUI
+configs. The URDF retains the physical 0.050 m tire radius for geometry.
+`rpm_feedback_offset: 0.5` compensates the measured signed feedback bias before
+mounting-direction conversion. It affects odometry only; exact zero remains zero
+and motor commands are unchanged.
+
+## USB reconnect recovery
+
+Primary bringup, navigation, and calibration launches restart the motor process
+two seconds after either motor remains offline, reopening the stable
+`/dev/serial/by-id/` paths. ZED retries device opening for up to six seconds,
+then its five-second respawn supervisor starts a clean component container after
+the camera USB device re-enumerates. A wheel-link loss inhibits motion: after recovery, reselect `X` or
+`A` for joystick driving, or publish a zero `/cmd_vel` before sending a new
+navigation command. This prevents a command that was active before the stop
+from restarting the robot unexpectedly.
+
+Check that Linux has recreated the devices before expecting recovery:
+
+```bash
+udevadm settle --timeout=5
+ls -l /dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if04
+ls -l /dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if06
+lsusb -d 2b03:
+```
+
+Recovery log lines include `exiting to reopen USB serial devices` followed by a
+new `Start velocity_control_node`, or a new `ros2 launch zed_wrapper` process.
+If Linux has not recreated a device, reseat the cable or hub connection; ROS
+cannot reopen a device that the OS does not expose.
 
 In bringup/mapping/navigation, EKF owns `odom -> base_link`; robot_state_publisher owns the camera
 mount and internal lens transforms. ZED supplies its calibrated lens-to-IMU TF
