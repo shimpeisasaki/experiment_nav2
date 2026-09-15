@@ -39,12 +39,18 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('robot_config', default_value=PathJoinSubstitution([
             share, 'config', 'robot_nav2.yaml'])),
-        DeclareLaunchArgument('usb_dev', default_value='/dev/ttyUSB0',
-                              description='DDM115 controller serial device'),
+        DeclareLaunchArgument(
+            'left_usb_dev',
+            default_value='/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if06',
+            description='CH4 serial device for left motor ID 2'),
+        DeclareLaunchArgument(
+            'right_usb_dev',
+            default_value='/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD9133ABCD-if04',
+            description='CH3 serial device for right motor ID 1'),
         DeclareLaunchArgument('manual_config', default_value=PathJoinSubstitution([
             share, 'config', 'manual_control.yaml'])),
         DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),
-        DeclareLaunchArgument('serial_number', default_value='0'),
+        DeclareLaunchArgument('serial_number', default_value='10028118'),
         DeclareLaunchArgument('zed_config', default_value=PathJoinSubstitution([
             share, 'config', 'zed_sensors.yaml'])),
         DeclareLaunchArgument('linear_speed', default_value='0.3'),
@@ -56,7 +62,10 @@ def generate_launch_description():
         DeclareLaunchArgument('bag_name', default_value='odom_calibration'),
         Node(package='ddsm115_controller', executable='velocity_control',
              name='velocity_control_node',
-             parameters=[robot_config, {'usb_dev': LaunchConfiguration('usb_dev')}],
+             parameters=[robot_config, {
+                 'left_usb_dev': LaunchConfiguration('left_usb_dev'),
+                 'right_usb_dev': LaunchConfiguration('right_usb_dev'),
+             }],
              output='screen'),
         Node(package='ddsm115_controller', executable='two_wheels_robot',
              name='two_wheels_robot_node',
@@ -71,17 +80,11 @@ def generate_launch_description():
              parameters=[{'autostart': True, 'node_names': ['velocity_smoother']}]),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                FindPackageShare('zed_wrapper'), 'launch', 'zed_camera.launch.py'])),
+                share, 'launch', 'zed_sensors.launch.py'])),
             condition=IfCondition(LaunchConfiguration('use_zed')),
             launch_arguments={
-                'camera_model': 'zedm', 'camera_name': 'zed', 'namespace': '',
-                'node_name': 'zed_node',
                 'serial_number': LaunchConfiguration('serial_number'),
-                'publish_urdf': 'false', 'publish_tf': 'false',
-                'publish_map_tf': 'false', 'publish_imu_tf': 'true',
-                'enable_gnss': 'false', 'enable_ipc': 'false',
-                'use_sim_time': 'false',
-                'ros_params_override_path': zed_config,
+                'zed_config': zed_config,
             }.items()),
         ExecuteProcess(
             cmd=['ros2', 'bag', 'record', '-o', LaunchConfiguration('bag_name'),

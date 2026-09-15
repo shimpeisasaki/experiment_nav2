@@ -1,0 +1,68 @@
+"""Build a 2D map manually with the curvature joystick and RPLIDAR S1.
+
+This intentionally does not start Nav2 navigation servers.  The manual
+velocity smoother is therefore the sole publisher of /cmd_vel, while
+slam_toolbox is the sole publisher of map -> odom.
+"""
+
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+
+
+def generate_launch_description():
+    share = FindPackageShare('experiment_nav2')
+    nav2_share = FindPackageShare('nav2_bringup')
+    slam_share = FindPackageShare('slam_toolbox')
+
+    return LaunchDescription([
+        DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),
+        DeclareLaunchArgument('mapping_rviz', default_value='true', choices=['true', 'false']),
+        DeclareLaunchArgument('serial_number', default_value='10028118'),
+        DeclareLaunchArgument(
+            'robot_config',
+            default_value=PathJoinSubstitution([share, 'config', 'robot_nav2.yaml'])),
+        DeclareLaunchArgument(
+            'manual_config',
+            default_value=PathJoinSubstitution([share, 'config', 'manual_control.yaml'])),
+        DeclareLaunchArgument(
+            'zed_config',
+            default_value=PathJoinSubstitution([share, 'config', 'zed_sensors.yaml'])),
+        DeclareLaunchArgument(
+            'slam_params_file',
+            default_value=PathJoinSubstitution([share, 'config', 'slam_toolbox.yaml'])),
+
+        # This owns the base, robot_state_publisher, RPLIDAR, joy, curvature
+        # teleop, and the manual velocity smoother. Its RViz is disabled in
+        # favor of Nav2's map-oriented RViz configuration below.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution([
+                share, 'launch', 'bringup.launch.py'])),
+            launch_arguments={
+                'use_base': 'true',
+                'use_lidar': 'true',
+                'use_zed': LaunchConfiguration('use_zed'),
+                'rviz': 'false',
+                'enable_joystick': 'true',
+                'serial_number': LaunchConfiguration('serial_number'),
+                'robot_config': LaunchConfiguration('robot_config'),
+                'manual_config': LaunchConfiguration('manual_config'),
+                'zed_config': LaunchConfiguration('zed_config'),
+            }.items()),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution([
+                slam_share, 'launch', 'online_async_launch.py'])),
+            launch_arguments={
+                'use_sim_time': 'false',
+                'slam_params_file': LaunchConfiguration('slam_params_file'),
+            }.items()),
+        Node(
+            package='rviz2', executable='rviz2', name='mapping_rviz', output='screen',
+            arguments=['-d', PathJoinSubstitution([
+                nav2_share, 'rviz', 'nav2_default_view.rviz'])],
+            condition=IfCondition(LaunchConfiguration('mapping_rviz'))),
+    ])

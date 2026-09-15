@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""One open-loop calibration motion with an area-controlled trapezoid profile."""
+import math
+import time
+
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
+
+
+def profile(test):
+    # distance (m) or angle (rad), peak rate, acceleration, linear/angular ratio
+    return {
+        'straight': (3.0, 0.2, 0.15, 1.0, 0.0),
+        'left_arc': (math.pi, 0.2, 0.15, 1.0, 1.0),
+        'right_arc': (math.pi, 0.2, 0.15, 1.0, -1.0),
+        'spin': (2.0 * math.pi, 0.3, 0.3, 0.0, 1.0),
+    }[test]
+
+
+def rate(t, distance, peak, acceleration):
+    ramp = peak / acceleration
+    total = distance / peak + ramp
+    return max(0.0, min(peak, acceleration * t, acceleration * (total - t)))
+
+
+class OdomTest(Node):
+    def __init__(self):
+        super().__init__('odom_test')
+        self.test = self.declare_parameter('test', 'straight').value
+        self.distance, self.peak, self.acceleration, self.linear, self.angular = profile(self.test)
+        self.duration = self.distance / self.peak + self.peak / self.acceleration
+        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.last_wheel = None
+        self.create_subscription(Odometry, '/wheel/odom', self.wheel, 10)
+        self.start = None
+        self.ready_at = None
+        self.created = time.monotonic()
+        self.done = False
+        self.failed = False
+        self.create_timer(1.0 / 30.0, self.tick)
+        self.get_logger().info(
+            f'{self.test}: target {self.distance:.6f}, peak {self.peak}, '
+            f'motion {self.duration:.3f}s including ramps; waiting for recorder and wheel odom')
+
+    def wheel(self, msg):
+        self.last_wheel = time.monotonic()
+
+    def tick(self):
+        now = time.monotonic()
+        command = Twist()
+        if self.start is None:
+            recording = any('rosbag2_recorder' in s.node_name for s in
+                            self.get_subscriptions_info_by_topic('/cmd_vel'))
+            ready = recording and self.last_wheel is not None and now - self.last_wheel < 0.5
+            if not ready:
+                self.ready_at = None
+            elif self.ready_at is None:
+                self.ready_at = now
+                self.get_logger().info('Recorder and wheel odom ready. Motion starts in 10 seconds.')
+            elif now - self.ready_at >= 10.0:
+                self.start = now
+                self.get_logger().info('Starting motion')
+            if now - self.created > 60.0 and self.start is None:
+                self.failed = self.done = True
+                self.get_logger().error('Readiness timeout; no motion started')
+        else:
+            elapsed = now - self.start
+            if elapsed < self.duration:
+                if self.last_wheel is None or now - self.last_wheel > 0.5:
+                    self.failed = self.done = True
+                    self.get_logger().error('Wheel odometry lost; stopping test')
+                else:
+                    speed = rate(elapsed, self.distance, self.peak, self.acceleration)
+                    command.linear.x = self.linear * speed
+                    command.angular.z = self.angular * speed
+            elif elapsed >= self.duration + 3.0:
+                self.done = True
+                self.get_logger().info('Finished deceleration and 3 seconds of zero commands')
+        self.publisher.publish(command)
+
+
+def main():
+    rclpy.init()
+    node = OdomTest()
+    try:
+        while rclpy.ok() and not node.done:
+            rclpy.spin_once(node, timeout_sec=0.1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if rclpy.ok():
+            node.publisher.publish(Twist())
+        node.destroy_node()
+        rclpy.try_shutdown()
+    if node.failed:
+        raise SystemExit(1)
+
+
+if __name__ == '__main__':
+    main()

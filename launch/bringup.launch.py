@@ -18,9 +18,10 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_base', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),
+        DeclareLaunchArgument('use_lidar', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_joystick', default_value='false', choices=['true', 'false']),
-        DeclareLaunchArgument('serial_number', default_value='0'),
+        DeclareLaunchArgument('serial_number', default_value='10028118'),
         DeclareLaunchArgument('robot_config', default_value=PathJoinSubstitution([
             share, 'config', 'robot_nav2.yaml'])),
         DeclareLaunchArgument('manual_config', default_value=PathJoinSubstitution([
@@ -37,8 +38,13 @@ def generate_launch_description():
              name='two_wheels_robot_node',
              parameters=[robot_config, {
                  'enable_joystick': False,
-                 'pub_tf': True}],
+                 'pub_tf': False}],
+             remappings=[('/odom', '/wheel/odom')],
              output='screen', condition=IfCondition(LaunchConfiguration('use_base'))),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution([
+                share, 'launch', 'ekf.launch.py'])),
+            condition=IfCondition(LaunchConfiguration('use_base'))),
         Node(package='joy', executable='joy_node', name='joy_node', output='screen',
              condition=IfCondition(LaunchConfiguration('enable_joystick'))),
         Node(package='ddsm115_controller', executable='curvature_teleop',
@@ -54,18 +60,17 @@ def generate_launch_description():
              condition=IfCondition(LaunchConfiguration('enable_joystick'))),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                FindPackageShare('zed_wrapper'), 'launch', 'zed_camera.launch.py'])),
+                share, 'launch', 'zed_sensors.launch.py'])),
             condition=IfCondition(LaunchConfiguration('use_zed')),
             launch_arguments={
-                'camera_model': 'zedm', 'camera_name': 'zed', 'namespace': '',
-                'node_name': 'zed_node',
                 'serial_number': LaunchConfiguration('serial_number'),
-                'publish_urdf': 'false', 'publish_tf': 'false',
-                'publish_map_tf': 'false', 'publish_imu_tf': 'true',
-                'enable_gnss': 'false', 'enable_ipc': 'false',
-                'use_sim_time': 'false',
-                'ros_params_override_path': LaunchConfiguration('zed_config'),
+                'zed_config': LaunchConfiguration('zed_config'),
             }.items()),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution([
+                share, 'launch', 'rplidar_s1.launch.py'])),
+            condition=IfCondition(LaunchConfiguration('use_lidar')),
+            launch_arguments={'lidar_rviz': 'false'}.items()),
         Node(package='rviz2', executable='rviz2', output='screen',
              arguments=['-d', PathJoinSubstitution([
                  share, 'rviz', 'experiment_robot.rviz'])],

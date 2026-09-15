@@ -2,7 +2,7 @@
 # Right stick: vertical = linear speed, horizontal = path curvature.
 curvature_teleop:
   ros__parameters:
-    update_period: 0.02
+    update_period: 0.033333
     joystick_timeout: 0.5
     joystick_deadzone: 0.02
     curvature_deadzone: 0.03
@@ -13,7 +13,7 @@ curvature_teleop:
 velocity_smoother:
   ros__parameters:
     use_sim_time: False
-    smoothing_frequency: 50.0
+    smoothing_frequency: 30.0
     scale_velocities: True
     feedback: "OPEN_LOOP"
     max_velocity: [1.666667, 0.0, 1.0]
