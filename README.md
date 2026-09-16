@@ -1,5 +1,7 @@
 # experiment_nav2
 
+[日本語の操作ガイド](README.ja.md)
+
 Nav2 configuration for the DDSM115 differential-drive base. The RPLIDAR S1 is
 the primary 2D obstacle and SLAM sensor: its `/scan` feeds both Nav2 costmaps
 and slam_toolbox. ZED remains available for VIO and future 3D perception.
@@ -50,6 +52,15 @@ open-loop Nav2 velocity smoother publishes the final `/cmd_vel`. Tune these para
 `config/manual_control.yaml`.
 
 ## RPLIDAR S1 standalone test
+
+All launches using `rplidar_s1.launch.py` publish raw data on `/scan_raw` and
+filtered data on `/scan`. Vehicle-relative front +/-100 degrees rejects ranges
+below 0.1 m; the remaining rear sector rejects ranges below 0.4 m. Rejected
+returns become NaN (unknown), not infinity (free-space clearing). Scan metadata
+is preserved. Distances are measured from the laser origin. Configure thresholds
+in `config/scan_filter.yaml`; its mounting yaw must match the URDF (currently pi).
+This also hides real obstacles within the masked distances. Loop bags record
+only filtered `/scan`; old recordings are unchanged.
 
 The robot's RPLIDAR S1 is a CP2102 USB serial device (serial `0001`) and runs
 at 256000 baud. Install the repository-managed udev rule once so the LiDAR is
@@ -176,6 +187,87 @@ configs. The URDF retains the physical 0.050 m tire radius for geometry.
 `rpm_feedback_offset: 0.5` compensates the measured signed feedback bias before
 mounting-direction conversion. It affects odometry only; exact zero remains zero
 and motor commands are unchanged.
+
+## Manual indoor loop: wheel / EKF / VIO comparison
+
+Stop other bringup, navigation, camera, and joystick launches before starting.
+This test launches manual control with its normal velocity smoother, LiDAR,
+wheel+IMU EKF, and a separate ZED VIO reference. It does not start Nav2 navigation
+or SLAM. Recording starts automatically; there is no automatic driving.
+
+```bash
+cd ~/ros2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch experiment_nav2 manual_loop_test.launch.py
+```
+
+Before moving, wait for `Recording...`, then check actual messages in a second
+terminal (source the same setup files there):
+
+```bash
+ros2 topic echo /zed/zed_node/odom --once --field pose.pose
+ros2 topic echo /localization/imu_status --once --qos-durability transient_local
+```
+
+Proceed only when VIO messages arrive and IMU status is `wheel_imu`. Mark the
+initial axle-center position and heading on the floor. Select X (normal drive),
+use the right stick to make one loop, and return to the marked position and
+heading. Keep the speed low indoors. Press B, wait about five seconds stationary,
+then Ctrl+C once in the launch terminal; wait for `Recording stopped` and process
+exit. The bag is saved as `manual_loop_YYYYMMDD_HHMMSS`. No separate recorder
+command is needed. `duration:=600` optionally stops all processes after ten
+minutes from launch (including startup time); the default has no time limit.
+
+Only six topics are recorded: `/wheel/odom`, `/odom`, `/zed/zed_node/odom`,
+`/scan`, `/tf`, and `/tf_static`. Images, motor telemetry, commands and raw IMU
+are not recorded. IMU still runs and feeds the live EKF/VIO. The saved estimates
+can be compared, but the EKF cannot be recomputed from raw sensors in this bag.
+LiDAR is always enabled for this test. Use `ros2 bag info <bag_directory>` after
+stopping to verify all six topics have nonzero message counts. Merely listing
+a topic does not prove it was recorded.
+
+### Generate a 2D occupancy grid from the recorded loop
+
+Stop all live robot launches. Source the ROS/workspace setup in each terminal.
+Start SLAM first, using recorded time and the existing robot-specific parameters:
+
+```bash
+ros2 launch slam_toolbox online_sync_launch.py use_sim_time:=true \
+  slam_params_file:=/home/uedalab/ros2_ws/src/experiment_nav2/config/slam_toolbox.yaml
+```
+
+In a second terminal, replace `BAG_DIRECTORY` with the saved bag path:
+
+```bash
+ros2 bag play BAG_DIRECTORY --clock --rate 0.5 --topics /scan /tf /tf_static
+```
+
+Recorded TF supplies `odom -> base_link` and `base_link -> laser`; do not start
+another EKF or robot driver during replay. SLAM creates `map -> odom` and `/map`.
+After playback and processing finish, leave SLAM running and save in a third
+terminal (choose a new output name to avoid overwriting an existing map):
+
+```bash
+ros2 run nav2_map_server map_saver_cli -f indoor_loop_map \
+  --ros-args -p use_sim_time:=false -p save_map_timeout:=10.0
+```
+
+The map saver uses wall time so its timeout still works after the bag clock
+stops. The output is `indoor_loop_map.yaml` and `indoor_loop_map.pgm`.
+
+`zed_vio_test.yaml` enables GEN_1 VIO and PERFORMANCE depth processing, without
+dense depth/point-cloud publication. This increases GPU use only for this test;
+ordinary bringup retains its low-compute profile. Area memory and loop-closure
+odometry resets are disabled to measure accumulated drift. ZED uses `zed_odom`
+and `zed_map` and does not publish competing odometry TF; VIO is not fused into
+the EKF. VIO and EKF share the ZED IMU, so they are not independent ground truth.
+For comparison, transform the VIO camera pose to the axle `base_link` using
+recorded TF, then align initial poses. Do not compare camera and axle positions
+directly on turns or add a fabricated `odom -> zed_odom` static transform.
+If ZED restarts during the lap, treat the reset as a new trajectory segment;
+prefer repeating the lap for a continuous comparison. Record measured endpoint
+position/heading error separately from estimated loop closure.
 
 ## USB reconnect recovery
 
@@ -315,7 +407,10 @@ is specifically needed for recording or inspection.
 
 1. Verify the provisional `footprint` in `config/nav2_params.yaml` against the
    full physical envelope including the caster fork.
-2. Verify the RPLIDAR scan origin is `base_link -> laser = (0.008, 0, 0.192)` m.
+2. Verify the RPLIDAR scan origin is `base_link -> laser = (0.008, 0, 0.192)` m,
+   with yaw `pi` radians (180 degrees): scanner +X faces the vehicle rear.
+   Restart robot_state_publisher after changing the mounting TF. Earlier bags
+   retain their recorded TF and are not corrected by changing the URDF.
 3. Verify `ros2 run tf2_tools view_frames` has one connected tree:
    `map -> odom -> base_link -> laser`.
 4. Tune wheel radius/base and odometry covariance from straight-line and turn
