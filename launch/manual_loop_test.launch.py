@@ -24,7 +24,7 @@ def setup(context):
         raise RuntimeError('duration must be finite and non-negative')
     # Estimated trajectories plus the scan and TF needed for offline 2D SLAM.
     # IMU remains active for EKF/VIO, but is not needed to replay these estimates.
-    topics = ['/wheel/odom', '/odom', '/zed/zed_node/odom',
+    topics = ['/wheel/odom', '/wheel_odom', '/odom', '/zed/zed_node/odom',
               '/scan', '/tf', '/tf_static']
     recorder = ExecuteProcess(
         cmd=['ros2', 'bag', 'record', '-o', str(destination)] + topics,
@@ -39,6 +39,7 @@ def setup(context):
             PythonLaunchDescriptionSource(str(share / 'launch/bringup.launch.py')),
             launch_arguments={
                 'use_base': 'true', 'use_zed': 'true', 'enable_joystick': 'true',
+                'odom_source': 'vio',
                 'use_lidar': 'true',
                 'rviz': LaunchConfiguration('rviz'),
                 'serial_number': LaunchConfiguration('serial_number'),

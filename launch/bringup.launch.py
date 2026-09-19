@@ -4,7 +4,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -18,6 +18,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_base', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),
+        DeclareLaunchArgument('odom_source', default_value='vio', choices=['vio', 'wheel']),
         DeclareLaunchArgument('use_lidar', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('enable_joystick', default_value='false', choices=['true', 'false']),
@@ -27,7 +28,8 @@ def generate_launch_description():
         DeclareLaunchArgument('manual_config', default_value=PathJoinSubstitution([
             share, 'config', 'manual_control.yaml'])),
         DeclareLaunchArgument('zed_config', default_value=PathJoinSubstitution([
-            share, 'config', 'zed_sensors.yaml'])),
+            share, 'config', PythonExpression(["'zed_vio_test.yaml' if '",
+                LaunchConfiguration('odom_source'), "' == 'vio' else 'zed_sensors.yaml'"])])),
         Node(package='robot_state_publisher', executable='robot_state_publisher',
              parameters=[{'robot_description': ParameterValue(
                  Command(['xacro ', model]), value_type=str)}], output='screen'),
@@ -44,7 +46,8 @@ def generate_launch_description():
              output='screen', condition=IfCondition(LaunchConfiguration('use_base'))),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                share, 'launch', 'ekf.launch.py'])),
+                share, 'launch', 'odometry.launch.py'])),
+            launch_arguments={'odom_source': LaunchConfiguration('odom_source')}.items(),
             condition=IfCondition(LaunchConfiguration('use_base'))),
         Node(package='joy', executable='joy_node', name='joy_node', output='screen',
              condition=IfCondition(LaunchConfiguration('enable_joystick'))),

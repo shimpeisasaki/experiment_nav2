@@ -4,9 +4,146 @@
 
 DDSM115差動二輪ロボットをROS 2 Humble / Nav2で動かすための設定です。
 屋内の障害物検出と地図作成にはRPLIDAR S1を使用します。
-通常の自己位置推定は車輪オドメトリとZED MiniのIMUをEKFで融合します。
-VIO（カメラとIMUによる移動推定）は周回比較テスト時だけ有効になります。
+通常の `/odom` はZED VIOです。車輪＋ZED IMUのEKFは独立して `/wheel_odom` を発行します。
 GNSSは現在の走行構成には統合していません。
+
+## Nav2の安全停止・ジョイスティック（2026-09追加）
+
+`navigation.launch.py` は常にjoyとnavigation_safetyを起動します。
+**起動直後はブレーキ状態です。初期位置設定・センサ確認後に明示的な走行許可が必要です。**
+この節が下の旧起動手順より優先します。別のbringup/teleopを重複起動しないでください。
+
+| 操作 | 動作 |
+|---|---|
+| A | Nav2走行を許可。B/Y後は健康・静止状態を2秒確認して復帰 |
+| X | 手動走行へ切替。右スティック、上限1.0 m/s |
+| B | 即時ブレーキ |
+| Y | 一旦ブレーキし、停止確認後にフリー |
+
+BとYを同時に押すとBを優先します。Yは車輪RPMが±1以下で0.3秒続いた場合だけフリーにします。
+3秒以内に確認できなければブレーキのままです。**フリーは車体を保持せず、坂で転がります。**
+joyトピックが0.5秒途絶えるとフリー中でもブレーキにします。
+無線受信機が切断をROSへ通知しない場合は無線リンク断を検出できないことがあります。
+
+### 起動・再許可
+
+1. 既存のNav2/bringupを停止し、更新版を起動。
+2. RVizの2D Pose Estimateで現在位置・方向を設定。
+3. 車輪停止、LiDAR/odom/TF、ジョイスティック受信が正常であることを確認。
+4. B/Yを離して2秒以上待ち、Aを押してNav2走行を許可。
+5. 新しいゴールを指定するか、B/Y前の有効なゴールへ復帰。
+
+```bash
+ros2 service call /navigation_safety/arm std_srvs/srv/Trigger '{}'
+ros2 topic echo /navigation_safety/status
+```
+
+サービスによる許可も利用できます。Yの後にA/Xを押した場合は自動的にブレーキを経由し、
+停止・健康状態が2秒続いてから選択モードへ入ります。
+異常の原因を直しても自動復帰しません。VIOアダプタが停止をラッチした場合はlaunchの再起動も必要です。
+
+```bash
+# ジョイスティックと同じ操作をサービスから実施
+ros2 service call /navigation_safety/brake std_srvs/srv/Trigger '{}'
+ros2 service call /navigation_safety/free std_srvs/srv/Trigger '{}'
+```
+
+### 障害物回避（Navfn + DWB）
+
+追加の認識モデルやGPUは使いません。標準のNavfnが地図と現在のLiDAR障害物を使って
+既定BTで1 Hzの経路再計画を行い、DWBが1.7秒先までの速度候補を評価します。
+global costmapは2 Hz、local costmapは10 Hz、制御は30 Hzです。
+local costmapは6×6 mとし、候補軌跡の詳細配信を無効にして計算・通信負荷を抑えています。
+
+インフレーション半径0.8 mは通行禁止幅でも、車体から必ず空ける距離でもありません。
+壁や人から離れるほど低くなるコストを付け、通れる隙間の中で離れた経路を選ばせます。
+コストは単純加算されないため、両側の色付き領域が重なるだけで通行不能にはなりません。
+DWBでは`ObstacleFootprint`も有効にし、旋回時の長方形車体の輪郭を評価します。
+`GoalAlign`は重み24・前方評価点0.1 mで有効にし、`BaseObstacle`の重みは0.5です。
+速度上限は並進1.0 m/s・旋回1.0 rad/s、スムーサー上限はそれぞれ1.1です。
+
+反映後はnavigationを再起動し、RVizで以下を確認してください。
+
+1. `/global_costmap/costmap` と `/local_costmap/costmap` に人の位置の障害物セルが出ること。
+2. `/plan`（Path）が人の左右いずれかを通る経路へ更新されること。
+3. `/local_plan`（Path）がその経路に向かい、ロボットが迂回すること。
+
+1が出ない場合はscan/TF/障害物レイヤー、1が出て2が変わらない場合は再計画や通行可能幅、
+2が変わるのに停止する場合はDWB・Collision Monitor・安全監視を切り分けます。
+`ros2 topic echo /navigation_safety/status`も確認できます。これらはbagなしで確認可能です。
+停止領域に既に入った場合は旋回も停止します。全ての配置で無停止の回避を保証する設定ではありません。
+
+### 停止の仕組みと限界
+
+- `/cmd_vel` は直接車輪へ渡さず、監視ノードが `/cmd_vel_safe` に転送します。
+- Nav2の速度指令はCollision Monitorを通り、前方停止領域（base_linkからx=0.325 m、幅0.38 m）で停止指令を出します。footprint前端から約0.25 mですが、実停止距離は速度・遅延に依存します。
+- local/global costmapのLiDAR障害物レイヤーとDWBが迂回を試みます。迂回不能なら停止します。
+- odom/scan/joy、車輪フィードバック、`odom -> base_link` と `map -> odom` の更新を監視。
+- odom/scanは0.5秒、車輪RPMは0.3秒、map TFは1.5秒を超える古さで走行を禁止。
+  AMCLの未来時刻TFを許容しますが、29秒の停止を許容時間で隠しません。
+- 監視ノードは20Hzでドライバーへモード信号を送信。0.3秒途絶えたらドライバー側もブレーキ。
+  途絶後に走行信号だけが戻っても復帰しません。
+- 通常終了・SIGINT・例外・途中の初期化失敗でも、ドライバーはポートを閉じる前に
+  各モーターへゼロ指令・速度モード・ブレーキを最大3回送信します。停止応答がなければ警告します。
+- Nav2中は通常のブレーキ解除・freewheelサービスで安全ラッチを迂回できません。
+- センサ異常がなくても、古い速度指令は0.3秒で転送を止めます。
+
+この監視はNav2のlaunchに適用します。手動bringup/校正は既存操作を維持しますが、
+ドライバー終了時の停止処理は共通です。通常終了後の保持状態はブレーキになります。
+**SIGKILL、USB通信断、電源断、OS停止ではソフトウェア停止を保証できません。**
+物理非常停止を必ず残してください。Yや停止サービスの成功は物理停止の保証ではありません。
+初回は車輪を浮かせて、B/Y・センサ停止・終了時停止を監視下で確認してください。
+
+## オドメトリの選択（2026-09更新）
+
+この節の仕様が、以下に残る旧手順の「通常はEKF」の説明より優先します。
+
+| トピック | 内容 | 親 / 子フレーム |
+|---|---|---|
+| `/wheel/odom` | 車輪だけの従来の推定 | odom / base_link（TFなし） |
+| `/wheel_odom` | 車輪＋IMUの独立EKF | wheel_odom / base_link（TFなし） |
+| `/zed/zed_node/odom` | ZEDの元のVIO | zed_odom / zed_camera_link（TFなし） |
+| `/odom` | 選択した走行用推定 | odom / base_link（TFあり） |
+
+標準は `odom_source:=vio`。`bringup.launch.py`、`mapping.launch.py`、`navigation.launch.py` に共通です。
+VIOのカメラ取付位置をTFで補正し、開始時の車体位置・方位を原点として2D化します。
+速度は変換済み位置・方位の差分です。ZEDの出力周期（設定15fps）に従い、30Hzへ補間しません。
+共分散は取り付けオフセットを考慮した保守的な対角近似です。
+EKFの独立原点 `wheel_odom` をVIOの `odom` と同一視する静的TFは発行しません。
+
+```bash
+# 通常：VIOが /odom。車輪＋IMUも /wheel_odom に並行出力
+ros2 launch experiment_nav2 bringup.launch.py enable_joystick:=true
+
+# 軽量：VIO・深度処理OFF、IMUとRGBはON。EKFを /odom にコピー
+ros2 launch experiment_nav2 bringup.launch.py enable_joystick:=true odom_source:=wheel
+
+# 地図作成も標準でVIO。軽量版は odom_source:=wheel を追加
+ros2 launch experiment_nav2 mapping.launch.py
+
+# 保存地図で走行する例
+ros2 launch experiment_nav2 navigation.launch.py slam:=false map:=/絶対パス/map.yaml odom_source:=vio
+```
+
+切替時はロボットを停止してlaunch全体を終了し、選択を変えて再起動してください。
+走行中の動的切替や、VIO故障時の自動フォールバックは行いません。
+`odom_source` を変える際は、以前の `zed_config` を指定したままにしないでください。
+カメラなしで使う場合は `use_zed:=false odom_source:=wheel` を指定します。
+
+VIO切断中は新しい `/odom`/TFを出しません。受信時に1秒超のデータ間隔、時刻巻き戻り、
+フレーム変更、大きな位置ジャンプを検出した場合は再起動まで出力を止めます。
+すべての追跡異常を検出するものではなく、モーターの非常停止機能でもありません。
+異常時はロボットを停止してから再起動・初期位置設定を行ってください。
+
+`manual_loop_test` は `/wheel_odom` も記録します（旧bagの `/odom` はEKFでした）。
+`odom_tests` と `robot_calibration` は校正条件を変えないため明示的にwheelモードを使用します。
+直接 `ekf.launch.py` を使う旧テストは従来の `/odom`/TF設定を維持しています。
+
+```bash
+ros2 topic echo /odom --once
+ros2 topic echo /wheel_odom --once
+ros2 run tf2_ros tf2_echo odom base_link
+```
 
 ## 目次
 
@@ -257,7 +394,8 @@ ros2 launch experiment_nav2 navigation.launch.py \
 
 1. RVizの`2D Pose Estimate`で地図上の現在位置と向きを指定します。
 2. LiDARと地図の壁が重なることを確認します。
-3. 近い位置へ`Nav2 Goal`を指定して走行を確認します。
+3. Aを押して`NAVIGATION`モードになったことを確認します。
+4. 近い位置へ`Nav2 Goal`を指定して走行を確認します。
 
 保存地図での自己位置推定はAMCLです。
 `navigation.launch.py`だけを起動した場合は、既定の`slam:=true`でSLAMとNav2が起動します。

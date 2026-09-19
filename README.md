@@ -6,7 +6,21 @@ Nav2 configuration for the DDSM115 differential-drive base. The RPLIDAR S1 is
 the primary 2D obstacle and SLAM sensor: its `/scan` feeds both Nav2 costmaps
 and slam_toolbox. ZED remains available for VIO and future 3D perception.
 
+Current default: `odom_source:=vio` in bringup/mapping/navigation. `/odom` and
+`odom -> base_link` use base-corrected planar VIO. The independent wheel/IMU EKF
+is always available at `/wheel_odom` without TF. Use `odom_source:=wheel` to
+disable VIO/depth and select EKF for `/odom`. Stop and restart the launch to
+switch; no automatic failover is implemented. See the Japanese guide for
+frame conventions, failure handling, and exceptions for calibration launches.
+
 ## Visualize the measured robot
+
+Safety update: `navigation.launch.py` starts braked and requires
+`ros2 service call /navigation_safety/arm std_srvs/srv/Trigger '{}'` after
+localization and sensors are ready. Joystick B brakes/cancels goals, Y brakes
+first and enters freewheel only after stationary feedback. A/X/sticks do not
+resume navigation. See the Japanese guide for limits and recovery procedures.
+The driver now attempts a serial stop/brake before closing each channel.
 
 This does not connect to the motors:
 

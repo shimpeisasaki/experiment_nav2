@@ -38,6 +38,7 @@ def setup(context):
         recorder,
         IncludeLaunchDescription(PythonLaunchDescriptionSource(str(share / 'launch/bringup.launch.py')),
             launch_arguments={'enable_joystick': 'false', 'use_lidar': 'false',
+                              'odom_source': 'wheel',
                               'rviz': 'false', 'use_zed': LaunchConfiguration('use_zed')}.items()),
         motion,
     ]

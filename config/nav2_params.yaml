@@ -14,7 +14,7 @@ amcl:
     global_frame_id: "map"
     lambda_short: 0.1
     laser_likelihood_max_dist: 2.0
-    laser_max_range: 20.0
+    laser_max_range: 40.0
     laser_min_range: 0.05
     laser_model_type: "likelihood_field"
     max_beams: 60
@@ -140,42 +140,50 @@ controller_server:
     # DWB parameters
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
-      debug_trajectory_details: True
+      debug_trajectory_details: False
+      publish_evaluation: False
+      publish_trajectories: False
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.20
+      # Navigation target: 1.0 m/s. The downstream smoother is intentionally
+      # 10% higher (1.1 m/s) so it does not repeatedly clip nominal commands.
+      max_vel_x: 1.00
       max_vel_y: 0.0
-      max_vel_theta: 0.80
+      max_vel_theta: 1.00
       min_speed_xy: 0.0
-      max_speed_xy: 0.26
+      max_speed_xy: 1.00
       min_speed_theta: 0.0
       # Add high threshold velocity for turtlebot 3 issue.
       # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
-      acc_lim_x: 0.40
+      acc_lim_x: 0.50
       acc_lim_y: 0.0
       acc_lim_theta: 0.80
-      decel_lim_x: -0.40
+      decel_lim_x: -0.80
       decel_lim_y: 0.0
       decel_lim_theta: -0.80
       vx_samples: 20
-      vy_samples: 5
+      vy_samples: 1
       vtheta_samples: 20
+      # Standard short local rollout; global replanning handles longer detours.
+      # A long constant-command rollout rejects useful turns in corridors.
       sim_time: 1.7
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
       xy_goal_tolerance: 0.25
-      trans_stopped_velocity: 0.25
+      trans_stopped_velocity: 0.05
       short_circuit_trajectory_evaluation: True
       stateful: True
-      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
-      PathAlign.scale: 32.0
-      PathAlign.forward_point_distance: 0.1
+      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      # Check the rectangular body's swept outline, not only base_link.
+      ObstacleFootprint.scale: 0.05
+      BaseObstacle.scale: 0.50
       GoalAlign.scale: 24.0
       GoalAlign.forward_point_distance: 0.1
+      PathAlign.scale: 16.0
+      PathAlign.forward_point_distance: 0.1
       PathDist.scale: 32.0
-      GoalDist.scale: 24.0
+      GoalDist.scale: 16.0
       RotateToGoal.scale: 32.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
@@ -183,22 +191,28 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 5.0
-      publish_frequency: 2.0
+      # Match the RPLIDAR S1's nominal 10 Hz scan rate. At 1 m/s, 5 Hz would
+      # move the robot 0.20 m between local obstacle updates.
+      update_frequency: 10.0
+      publish_frequency: 5.0
       global_frame: odom
       robot_base_frame: base_link
       use_sim_time: False
       rolling_window: true
-      width: 3
-      height: 3
+      # 3 m per side covers the rollout plus the rear footprint at 1 m/s.
+      width: 6
+      height: 6
       resolution: 0.05
       # Provisional swept envelope, including a conservative caster allowance.
       footprint: "[[0.075, 0.170], [0.075, -0.170], [-0.460, -0.170], [-0.460, 0.170]]"
-      plugins: ["obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
+        # Soft clearance preference, NOT a mandatory 0.8 m body clearance.
+        # Preserve a gradient away from walls and people instead of a flat
+        # zero-cost field immediately outside a narrow inflation band.
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.8
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -212,6 +226,8 @@ local_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 8.0
           obstacle_min_range: 0.05
+          observation_persistence: 0.0
+          expected_update_rate: 0.1
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
@@ -220,7 +236,8 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 1.0
+      # Feed dynamic obstacles to the default 1 Hz global replanning BT.
+      update_frequency: 2.0
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
@@ -242,13 +259,16 @@ global_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 8.0
           obstacle_min_range: 0.05
+          observation_persistence: 0.0
+          expected_update_rate: 0.1
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
+        # Soft cost field for Navfn to select a detour around live scan points.
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.8
       always_send_full_costmap: True
 
 map_server:
@@ -333,11 +353,58 @@ velocity_smoother:
     smoothing_frequency: 30.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.26, 0.0, 1.0]
-    min_velocity: [-0.26, 0.0, -1.0]
-    max_accel: [2.5, 0.0, 3.2]
-    max_decel: [-2.5, 0.0, -3.2]
+    # Actuator guardrail: retain 10% linear headroom above the controller's
+    # 1.0 m/s target and use compatible acceleration limits for smooth motion.
+    max_velocity: [1.1, 0.0, 1.1]
+    min_velocity: [-0.26, 0.0, -1.1]
+    max_accel: [0.6, 0.0, 1.0]
+    max_decel: [-0.8, 0.0, -1.2]
     odom_topic: "odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
+
+# Independent last-resort protection after Nav2's planner/controller. DWB uses
+# both costmaps to route around obstacles; this node stops if a frontal obstacle
+# is still inside the near-field protection zone.
+collision_monitor:
+  ros__parameters:
+    use_sim_time: False
+    base_frame_id: "base_link"
+    odom_frame_id: "odom"
+    cmd_vel_in_topic: "/cmd_vel"
+    cmd_vel_out_topic: "/cmd_vel_collision"
+    transform_tolerance: 0.2
+    source_timeout: 0.3
+    base_shift_correction: True
+    stop_pub_timeout: 1.0
+    polygons: ["FrontStop", "FootprintApproach"]
+    FrontStop:
+      type: "polygon"
+      # 0.38 m wide preserves a 0.40 m corridor. This is a hard-stop layer
+      # only; gradual deceleration is handled by FootprintApproach below.
+      # x=0.325 m yields approximately 0.25 m clearance from the costmap
+      # footprint's front edge at x=0.075 m.
+      points: [0.325, 0.19, 0.325, -0.19, 0.05, -0.19, 0.05, 0.19]
+      action_type: "stop"
+      max_points: 2
+      visualize: True
+      polygon_pub_topic: "/collision_monitor/front_stop"
+      enabled: True
+    FootprintApproach:
+      # Predicts collision of the real costmap footprint along the commanded
+      # path and reduces speed with a 2 s time-to-collision horizon.
+      # This is a braking layer; Navfn and DWB choose the detour.
+      type: "polygon"
+      action_type: "approach"
+      footprint_topic: "/local_costmap/published_footprint"
+      time_before_collision: 2.0
+      simulation_time_step: 0.1
+      max_points: 3
+      visualize: False
+      enabled: True
+    observation_sources: ["scan"]
+    scan:
+      type: "scan"
+      topic: "/scan"
+      enabled: True
