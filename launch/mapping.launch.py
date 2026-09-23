@@ -16,6 +16,7 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     share = FindPackageShare('experiment_nav2')
+    base_share = FindPackageShare('cat_bringup')
     nav2_share = FindPackageShare('nav2_bringup')
     slam_share = FindPackageShare('slam_toolbox')
 
@@ -26,13 +27,13 @@ def generate_launch_description():
         DeclareLaunchArgument('serial_number', default_value='10028118'),
         DeclareLaunchArgument(
             'robot_config',
-            default_value=PathJoinSubstitution([share, 'config', 'robot_nav2.yaml'])),
+            default_value=PathJoinSubstitution([base_share, 'config', 'robot_nav2.yaml'])),
         DeclareLaunchArgument(
             'manual_config',
-            default_value=PathJoinSubstitution([share, 'config', 'manual_control.yaml'])),
+            default_value=PathJoinSubstitution([base_share, 'config', 'manual_control.yaml'])),
         DeclareLaunchArgument(
             'zed_config',
-            default_value=PathJoinSubstitution([share, 'config', PythonExpression([
+            default_value=PathJoinSubstitution([base_share, 'config', PythonExpression([
                 "'zed_vio_test.yaml' if '", LaunchConfiguration('odom_source'),
                 "' == 'vio' else 'zed_sensors.yaml'"])])),
         DeclareLaunchArgument(
@@ -44,7 +45,7 @@ def generate_launch_description():
         # favor of Nav2's map-oriented RViz configuration below.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                share, 'launch', 'bringup.launch.py'])),
+                base_share, 'launch', 'bringup.launch.py'])),
             launch_arguments={
                 'use_base': 'true',
                 'odom_source': LaunchConfiguration('odom_source'),

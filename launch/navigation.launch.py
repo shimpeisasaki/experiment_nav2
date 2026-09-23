@@ -18,20 +18,21 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     share = FindPackageShare('experiment_nav2')
+    base_share = FindPackageShare('cat_bringup')
     nav2_share = FindPackageShare('nav2_bringup')
     slam_share = FindPackageShare('slam_toolbox')
     params_file = LaunchConfiguration('params_file')
     robot_config = LaunchConfiguration('robot_config')
     manual_config = LaunchConfiguration('manual_config')
     slam = LaunchConfiguration('slam')
-    model = PathJoinSubstitution([share, 'urdf', 'experiment_robot.urdf.xacro'])
+    model = PathJoinSubstitution([base_share, 'urdf', 'experiment_robot.urdf.xacro'])
 
     return LaunchDescription([
         DeclareLaunchArgument('slam', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_zed', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('odom_source', default_value='vio', choices=['vio', 'wheel']),
         DeclareLaunchArgument('zed_config', default_value=PathJoinSubstitution([
-            share, 'config', PythonExpression(["'zed_vio_test.yaml' if '",
+            base_share, 'config', PythonExpression(["'zed_vio_test.yaml' if '",
                 LaunchConfiguration('odom_source'), "' == 'vio' else 'zed_sensors.yaml'"])])),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument(
@@ -46,10 +47,10 @@ def generate_launch_description():
             default_value=PathJoinSubstitution([share, 'config', 'slam_toolbox.yaml'])),
         DeclareLaunchArgument(
             'robot_config',
-            default_value=PathJoinSubstitution([share, 'config', 'robot_nav2.yaml'])),
+            default_value=PathJoinSubstitution([base_share, 'config', 'robot_nav2.yaml'])),
         DeclareLaunchArgument(
             'manual_config',
-            default_value=PathJoinSubstitution([share, 'config', 'manual_control.yaml'])),
+            default_value=PathJoinSubstitution([base_share, 'config', 'manual_control.yaml'])),
 
         Node(
             package='robot_state_publisher', executable='robot_state_publisher',
@@ -103,16 +104,16 @@ def generate_launch_description():
             remappings=[('/odom', '/wheel/odom'), ('/cmd_vel', '/cmd_vel_safe')]),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                share, 'launch', 'odometry.launch.py'])),
+                base_share, 'launch', 'odometry.launch.py'])),
             launch_arguments={'odom_source': LaunchConfiguration('odom_source')}.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                share, 'launch', 'zed_sensors.launch.py'])),
+                base_share, 'launch', 'zed_sensors.launch.py'])),
             condition=IfCondition(LaunchConfiguration('use_zed')),
             launch_arguments={'zed_config': LaunchConfiguration('zed_config')}.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                share, 'launch', 'rplidar_s1.launch.py'])),
+                base_share, 'launch', 'rplidar_s1.launch.py'])),
             launch_arguments={
                 'serial_port': LaunchConfiguration('serial_port'),
                 'frame_id': 'laser',

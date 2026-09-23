@@ -1,25 +1,12 @@
-"""Continuous wheel/gyro EKF, including IMU freshness monitoring."""
+"""Compatibility entry point; implementation lives in cat_bringup."""
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch_ros.actions import Node
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
-from launch.substitutions import PathJoinSubstitution, LaunchConfiguration
-from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
-    return LaunchDescription([
-        DeclareLaunchArgument('ekf_output', default_value='/odom'),
-        DeclareLaunchArgument('ekf_frame', default_value='odom'),
-        DeclareLaunchArgument('ekf_publish_tf', default_value='true'),
-        Node(package='experiment_nav2', executable='imu_guard', output='screen',
-             parameters=[{'max_gyro_magnitude': 3.0}]),
-        Node(package='robot_localization', executable='ekf_node',
-             name='ekf_filter_node', output='screen',
-             parameters=[PathJoinSubstitution([
-                 FindPackageShare('experiment_nav2'), 'config', 'ekf.yaml']),
-                 {'publish_tf': ParameterValue(LaunchConfiguration('ekf_publish_tf'), value_type=bool),
-                  'odom_frame': LaunchConfiguration('ekf_frame'),
-                  'world_frame': LaunchConfiguration('ekf_frame')}],
-             remappings=[('odometry/filtered', LaunchConfiguration('ekf_output'))]),
-    ])
+    return LaunchDescription([IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([
+            FindPackageShare('cat_bringup'), 'launch', 'ekf.launch.py'])))])

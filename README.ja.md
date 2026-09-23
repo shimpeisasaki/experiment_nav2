@@ -1,5 +1,11 @@
 # experiment_nav2 日本語ガイド
 
+共通のセンサ・制御・オドメトリ起動は`cat_bringup`パッケージへ分離しました。
+通常起動は`ros2 launch cat_bringup bringup.launch.py`です。ジョイスティックは既定で有効、
+Xは手動、Aは外部`/cmd_vel`入力を選択します。切替は共通スムーサーでゼロまで減速してから行います。
+従来の`experiment_nav2 bringup.launch.py`も互換入口として利用できます。
+Nav2専用launchのA/X切替・安全監視は従来の構成です。詳しくは`cat_bringup/README.md`を参照してください。
+
 [English README](README.md)
 
 DDSM115差動二輪ロボットをROS 2 Humble / Nav2で動かすための設定です。

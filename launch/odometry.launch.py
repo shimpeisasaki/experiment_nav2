@@ -1,21 +1,12 @@
-"""Independent wheel/IMU estimate plus a single selected navigation TF source."""
+"""Compatibility entry point; implementation lives in cat_bringup."""
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node
+from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    share = FindPackageShare('experiment_nav2')
-    return LaunchDescription([
-        DeclareLaunchArgument('odom_source', default_value='vio', choices=['vio', 'wheel']),
-        IncludeLaunchDescription(PythonLaunchDescriptionSource(
-            PathJoinSubstitution([share, 'launch', 'ekf.launch.py'])),
-            launch_arguments={'ekf_output': '/wheel_odom', 'ekf_frame': 'wheel_odom',
-                              'ekf_publish_tf': 'false'}.items()),
-        Node(package='experiment_nav2', executable='odom_source', name='odom_source',
-             parameters=[{'source': LaunchConfiguration('odom_source')}], output='screen',
-             additional_env={'PYTHONNOUSERSITE': '1'}),
-    ])
+    return LaunchDescription([IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([
+            FindPackageShare('cat_bringup'), 'launch', 'odometry.launch.py'])))])
