@@ -14,7 +14,7 @@ from launch.substitutions import LaunchConfiguration
 
 
 def setup(context):
-    share = Path(get_package_share_directory('experiment_nav2'))
+    share = Path(get_package_share_directory('experiment_cat'))
     name = LaunchConfiguration('bag_name').perform(context)
     destination = Path(name or f'manual_loop_{datetime.now():%Y%m%d_%H%M%S}').expanduser().absolute()
     if destination.exists():

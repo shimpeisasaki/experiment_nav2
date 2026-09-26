@@ -98,7 +98,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <!-- Ellipsoid: diameter 0.160, height 0.050; reference at its center. -->
-      <geometry><mesh filename="package://experiment_nav2/meshes/antenna.stl"/></geometry>
+      <geometry><mesh filename="package://experiment_cat/meshes/antenna.stl"/></geometry>
       <material name="antenna_white"/>
     </visual>
   </link>

@@ -14,7 +14,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def setup(context):
-    share = Path(get_package_share_directory('experiment_nav2'))
+    share = Path(get_package_share_directory('experiment_cat'))
     motor = LaunchConfiguration('motor').perform(context)
     direction = LaunchConfiguration('direction').perform(context)
     rpm = LaunchConfiguration('rpm').perform(context)
@@ -29,7 +29,7 @@ def setup(context):
         '/ddsm115/rpm_fb', '/ddsm115/online_id', '/ddsm115/error',
         '/ddsm115/cur_fb', '/ddsm115/temp_fb'], output='screen',
         sigterm_timeout='15', sigkill_timeout='5')
-    test = Node(package='experiment_nav2', executable='motor_rpm_test', output='screen',
+    test = Node(package='experiment_cat', executable='motor_rpm_test', output='screen',
                 parameters=[{
                     'motor': motor, 'direction': direction,
                     'rpm': ParameterValue(LaunchConfiguration('rpm'), value_type=int),
@@ -50,7 +50,7 @@ def setup(context):
 
 
 def generate_launch_description():
-    share = Path(get_package_share_directory('experiment_nav2'))
+    share = Path(get_package_share_directory('experiment_cat'))
     return LaunchDescription([
         DeclareLaunchArgument('motor', default_value='right', choices=['left', 'right']),
         DeclareLaunchArgument('direction', default_value='forward', choices=['forward', 'reverse']),

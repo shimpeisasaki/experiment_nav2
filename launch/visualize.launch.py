@@ -21,13 +21,13 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'model',
             default_value=PathJoinSubstitution([
-                FindPackageShare('experiment_nav2'), 'urdf', 'experiment_robot.urdf.xacro'
+                FindPackageShare('experiment_cat'), 'urdf', 'experiment_robot.urdf.xacro'
             ]),
         ),
         DeclareLaunchArgument(
             'rviz_config',
             default_value=PathJoinSubstitution([
-                FindPackageShare('experiment_nav2'), 'rviz', 'experiment_robot.rviz'
+                FindPackageShare('experiment_cat'), 'rviz', 'experiment_robot.rviz'
             ]),
         ),
         Node(

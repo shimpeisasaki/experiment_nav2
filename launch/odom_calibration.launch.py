@@ -20,7 +20,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    share = FindPackageShare('experiment_nav2')
+    share = FindPackageShare('experiment_cat')
     robot_config = LaunchConfiguration('robot_config')
     manual_config = LaunchConfiguration('manual_config')
     zed_config = LaunchConfiguration('zed_config')

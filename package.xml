@@ -1,13 +1,15 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>experiment_nav2</name>
+  <name>experiment_cat</name>
   <version>0.1.0</version>
   <description>Nav2 integration assets for the DDSM115 differential-drive experiment robot.</description>
-  <maintainer email="todo@example.com">experiment_nav2 maintainer</maintainer>
+  <maintainer email="todo@example.com">experiment_cat maintainer</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <exec_depend>cat_bringup</exec_depend>
+  <exec_depend>emcl2</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
   <exec_depend>ddsm115_controller</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>

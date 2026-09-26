@@ -1,9 +1,39 @@
-# experiment_nav2 日本語ガイド
+# experiment_cat 日本語ガイド
+
+## emcl2による自己位置推定
+
+```bash
+cd ~/ros2_ws
+vcs import src < src/experiment_cat/dependencies.repos
+source /opt/ros/humble/setup.bash
+rosdep install --from-paths src/emcl2_ros2 src/experiment_cat --ignore-src --rosdistro humble -y
+colcon build --packages-select emcl2 cat_bringup experiment_cat --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+source install/setup.bash
+ros2 launch experiment_cat navigation.launch.py slam:=false map:=$HOME/ros2_ws/indoor_loop_map_vio.yaml
+```
+
+RVizの「2D Pose Estimate」で初期位置を指定してから、Aで走行許可・Nav2 Goalで目標を指定します。
+AMCLは起動せず、emcl2のみが`map → odom`を発行します。地図作成時（slam:=true）はSLAMを使用します。
+
+自己位置推定のみを使う場合は、センサ・odom・TFを別途起動した状態で以下を実行します。
+navigation.launch.pyとの同時起動は不要です。
+
+```bash
+ros2 launch experiment_cat localization.launch.py map:=$HOME/ros2_ws/indoor_loop_map_vio.yaml
+```
+
+設定は`config/emcl2.yaml`（`localization_params_file:=絶対パス`で変更可能）。
+500粒子、odom更新30 Hz、scanは5点ごとに評価します。
+膨張リセットはalpha_threshold=0.5、位置半径0.1 m・姿勢半径0.2 radを初期値としています。
+`sensor_reset: false`は別のセンサリセット機能の設定で、膨張リセットの無効化ではありません。
+主な出力は`/mcl_pose`、`/particlecloud`（PoseArray）、`/alpha`、`map → odom`です。
+`/scan`はcat_bringupからReliableで配信します。オドメトリの選択方法は変更ありません。
+膨張リセットは推定の復帰を試みる機能であり、常に復帰できる保証や走行許可の判断ではありません。
 
 共通のセンサ・制御・オドメトリ起動は`cat_bringup`パッケージへ分離しました。
 通常起動は`ros2 launch cat_bringup bringup.launch.py`です。ジョイスティックは既定で有効、
 Xは手動、Aは外部`/cmd_vel`入力を選択します。切替は共通スムーサーでゼロまで減速してから行います。
-従来の`experiment_nav2 bringup.launch.py`も互換入口として利用できます。
+従来の`experiment_cat bringup.launch.py`も互換入口として利用できます。
 Nav2専用launchのA/X切替・安全監視は従来の構成です。詳しくは`cat_bringup/README.md`を参照してください。
 
 [English README](README.md)
@@ -86,7 +116,7 @@ DWBでは`ObstacleFootprint`も有効にし、旋回時の長方形車体の輪�
 - local/global costmapのLiDAR障害物レイヤーとDWBが迂回を試みます。迂回不能なら停止します。
 - odom/scan/joy、車輪フィードバック、`odom -> base_link` と `map -> odom` の更新を監視。
 - odom/scanは0.5秒、車輪RPMは0.3秒、map TFは1.5秒を超える古さで走行を禁止。
-  AMCLの未来時刻TFを許容しますが、29秒の停止を許容時間で隠しません。
+  自己位置推定器の未来時刻TFを許容しますが、29秒の停止を許容時間で隠しません。
 - 監視ノードは20Hzでドライバーへモード信号を送信。0.3秒途絶えたらドライバー側もブレーキ。
   途絶後に走行信号だけが戻っても復帰しません。
 - 通常終了・SIGINT・例外・途中の初期化失敗でも、ドライバーはポートを閉じる前に
@@ -119,16 +149,16 @@ EKFの独立原点 `wheel_odom` をVIOの `odom` と同一視する静的TFは�
 
 ```bash
 # 通常：VIOが /odom。車輪＋IMUも /wheel_odom に並行出力
-ros2 launch experiment_nav2 bringup.launch.py enable_joystick:=true
+ros2 launch experiment_cat bringup.launch.py enable_joystick:=true
 
 # 軽量：VIO・深度処理OFF、IMUとRGBはON。EKFを /odom にコピー
-ros2 launch experiment_nav2 bringup.launch.py enable_joystick:=true odom_source:=wheel
+ros2 launch experiment_cat bringup.launch.py enable_joystick:=true odom_source:=wheel
 
 # 地図作成も標準でVIO。軽量版は odom_source:=wheel を追加
-ros2 launch experiment_nav2 mapping.launch.py
+ros2 launch experiment_cat mapping.launch.py
 
 # 保存地図で走行する例
-ros2 launch experiment_nav2 navigation.launch.py slam:=false map:=/絶対パス/map.yaml odom_source:=vio
+ros2 launch experiment_cat navigation.launch.py slam:=false map:=/絶対パス/map.yaml odom_source:=vio
 ```
 
 切替時はロボットを停止してlaunch全体を終了し、選択を変えて再起動してください。
@@ -179,7 +209,7 @@ source install/setup.bash
 ```bash
 cd ~/ros2_ws
 source /opt/ros/humble/setup.bash
-colcon build --packages-select ddsm115_controller experiment_nav2 --symlink-install
+colcon build --packages-select ddsm115_controller experiment_cat --symlink-install
 source install/setup.bash
 ```
 
@@ -193,14 +223,14 @@ bagの再生時も実機のlaunchは停止します。
 
 | 目的 | コマンド |
 |---|---|
-| 車体モデルだけ表示（モーター接続なし） | `ros2 launch experiment_nav2 visualize.launch.py` |
-| センサ・車輪・EKFを確認 | `ros2 launch experiment_nav2 bringup.launch.py` |
-| 手動走行 | `ros2 launch experiment_nav2 bringup.launch.py enable_joystick:=true` |
-| ZED単体 | `ros2 launch experiment_nav2 zed_sensors.launch.py` |
-| LiDAR単体 | `ros2 launch experiment_nav2 rplidar_s1.launch.py` |
-| 手動走行しながら地図を作る | `ros2 launch experiment_nav2 mapping.launch.py` |
-| 周回を記録し、後から地図・軌跡を確認 | `ros2 launch experiment_nav2 manual_loop_test.launch.py` |
-| Nav2起動（既定はSLAM併用） | `ros2 launch experiment_nav2 navigation.launch.py` |
+| 車体モデルだけ表示（モーター接続なし） | `ros2 launch experiment_cat visualize.launch.py` |
+| センサ・車輪・EKFを確認 | `ros2 launch experiment_cat bringup.launch.py` |
+| 手動走行 | `ros2 launch experiment_cat bringup.launch.py enable_joystick:=true` |
+| ZED単体 | `ros2 launch experiment_cat zed_sensors.launch.py` |
+| LiDAR単体 | `ros2 launch experiment_cat rplidar_s1.launch.py` |
+| 手動走行しながら地図を作る | `ros2 launch experiment_cat mapping.launch.py` |
+| 周回を記録し、後から地図・軌跡を確認 | `ros2 launch experiment_cat manual_loop_test.launch.py` |
+| Nav2起動（既定はSLAM併用） | `ros2 launch experiment_cat navigation.launch.py` |
 
 `bringup.launch.py`は自動で走行指令を出しませんが、外部の`/cmd_vel`を受け付けます。
 `use_base:=false`、`use_zed:=false`、`use_lidar:=false`で個別に省略できます。
@@ -210,7 +240,7 @@ LiDARのデバイス名`/dev/rplidar`を設定していない場合は、一度�
 
 ```bash
 sudo install -m 644 \
-  ~/ros2_ws/src/experiment_nav2/udev/99-experiment-rplidar.rules \
+  ~/ros2_ws/src/experiment_cat/udev/99-experiment-rplidar.rules \
   /etc/udev/rules.d/99-experiment-rplidar.rules
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=tty
@@ -239,7 +269,7 @@ ls -l /dev/rplidar
 ### 1. 起動
 
 ```bash
-ros2 launch experiment_nav2 manual_loop_test.launch.py
+ros2 launch experiment_cat manual_loop_test.launch.py
 ```
 
 手動走行、LiDAR、EKF、ZED VIO、RViz、rosbag記録が起動します。
@@ -295,10 +325,10 @@ ros2 bag info ~/ros2_ws/manual_loop_20260915_213541
 
 ```bash
 # 起動から600秒で自動終了（準備時間も含む）
-ros2 launch experiment_nav2 manual_loop_test.launch.py duration:=600
+ros2 launch experiment_cat manual_loop_test.launch.py duration:=600
 
 # 名前を指定。既存のフォルダ名は使えません
-ros2 launch experiment_nav2 manual_loop_test.launch.py bag_name:=indoor_loop_02 rviz:=false
+ros2 launch experiment_cat manual_loop_test.launch.py bag_name:=indoor_loop_02 rviz:=false
 ```
 
 VIO用設定は[zed_vio_test.yaml](config/zed_vio_test.yaml)です。
@@ -315,13 +345,13 @@ GEN_1 VIOとPERFORMANCE深度処理を使用し、深度画像・点群は配信
 ```bash
 ros2 launch slam_toolbox online_sync_launch.py \
   use_sim_time:=true \
-  slam_params_file:=$HOME/ros2_ws/src/experiment_nav2/config/slam_toolbox.yaml
+  slam_params_file:=$HOME/ros2_ws/src/experiment_cat/config/slam_toolbox.yaml
 ```
 
 ### ターミナル②：設定済みRVizを開く
 
 ```bash
-rviz2 -d ~/ros2_ws/src/experiment_nav2/rviz/bag_mapping.rviz \
+rviz2 -d ~/ros2_ws/src/experiment_cat/rviz/bag_mapping.rviz \
   --ros-args -p use_sim_time:=true
 ```
 
@@ -394,7 +424,7 @@ VIOが動かない場合は正解として評価せず、カメラの追跡状�
 bag再生、SLAM、手動走行用launchを停止してから実行します。
 
 ```bash
-ros2 launch experiment_nav2 navigation.launch.py \
+ros2 launch experiment_cat navigation.launch.py \
   slam:=false map:=$HOME/ros2_ws/indoor_loop_map.yaml
 ```
 
@@ -403,7 +433,7 @@ ros2 launch experiment_nav2 navigation.launch.py \
 3. Aを押して`NAVIGATION`モードになったことを確認します。
 4. 近い位置へ`Nav2 Goal`を指定して走行を確認します。
 
-保存地図での自己位置推定はAMCLです。
+保存地図での自己位置推定はemcl2です。
 `navigation.launch.py`だけを起動した場合は、既定の`slam:=true`でSLAMとNav2が起動します。
 手動で地図を作るだけなら`mapping.launch.py`を使用します。
 
@@ -415,11 +445,11 @@ ros2 launch experiment_nav2 navigation.launch.py \
 実行ごとに位置を戻し、十分な走行スペースを確保してください。
 
 ```bash
-ros2 launch experiment_nav2 odom_tests.launch.py test:=straight
-ros2 launch experiment_nav2 odom_tests.launch.py test:=straight_12m
-ros2 launch experiment_nav2 odom_tests.launch.py test:=left_arc
-ros2 launch experiment_nav2 odom_tests.launch.py test:=right_arc
-ros2 launch experiment_nav2 odom_tests.launch.py test:=spin
+ros2 launch experiment_cat odom_tests.launch.py test:=straight
+ros2 launch experiment_cat odom_tests.launch.py test:=straight_12m
+ros2 launch experiment_cat odom_tests.launch.py test:=left_arc
+ros2 launch experiment_cat odom_tests.launch.py test:=right_arc
+ros2 launch experiment_cat odom_tests.launch.py test:=spin
 ```
 
 | テスト | 指令内容 |
@@ -441,10 +471,10 @@ ros2 launch experiment_nav2 odom_tests.launch.py test:=spin
 既定は片輪90 RPMを10秒間、指令上15回転です。
 
 ```bash
-ros2 launch experiment_nav2 motor_rpm_calibration.launch.py motor:=right direction:=forward
-ros2 launch experiment_nav2 motor_rpm_calibration.launch.py motor:=right direction:=reverse
-ros2 launch experiment_nav2 motor_rpm_calibration.launch.py motor:=left direction:=forward
-ros2 launch experiment_nav2 motor_rpm_calibration.launch.py motor:=left direction:=reverse
+ros2 launch experiment_cat motor_rpm_calibration.launch.py motor:=right direction:=forward
+ros2 launch experiment_cat motor_rpm_calibration.launch.py motor:=right direction:=reverse
+ros2 launch experiment_cat motor_rpm_calibration.launch.py motor:=left direction:=forward
+ros2 launch experiment_cat motor_rpm_calibration.launch.py motor:=left direction:=reverse
 ```
 
 `Start counting now`から停止までの回転数を数えます。bagも自動で開始・終了します。
@@ -486,7 +516,7 @@ TFを待たず単体起動でも同じ判定を行うため、取付角を設定
 IMUの姿勢・加速度、VIO、GNSSは融合しません。
 IMUが無効・途絶の場合は`wheel_only`、正常なら`wheel_imu`になります。
 
-TFの担当は、EKFが`odom → base_link`、SLAMまたはAMCLが`map → odom`です。
+TFの担当は、EKFが`odom → base_link`、SLAMまたはemcl2が`map → odom`です。
 センサ取付位置はrobot_state_publisher、ZED内部のIMU変換はZEDが配信します。
 ZED VIOは独自の`zed_odom`座標で出力し、競合するodom TFは配信しません。
 
@@ -529,7 +559,7 @@ bag再生終了後は新しいスキャンやodomが届かなくなります。
 
 ```bash
 LIBGL_ALWAYS_SOFTWARE=1 rviz2 \
-  -d ~/ros2_ws/src/experiment_nav2/rviz/bag_mapping.rviz \
+  -d ~/ros2_ws/src/experiment_cat/rviz/bag_mapping.rviz \
   --ros-args -p use_sim_time:=true
 ```
 

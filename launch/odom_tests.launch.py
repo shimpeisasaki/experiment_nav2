@@ -14,7 +14,7 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def setup(context):
-    share = Path(get_package_share_directory('experiment_nav2'))
+    share = Path(get_package_share_directory('experiment_cat'))
     test = LaunchConfiguration('test').perform(context)
     name = LaunchConfiguration('bag_name').perform(context)
     destination = Path(name or f'odom_{test}_{datetime.now():%Y%m%d_%H%M%S}').expanduser().absolute()
@@ -26,7 +26,7 @@ def setup(context):
         '/localization/imu_status', '/ddsm115/rpm_cmd', '/ddsm115/rpm_fb',
         '/ddsm115/online_id', '/ddsm115/error', '/tf', '/tf_static'],
         output='screen', sigterm_timeout='15', sigkill_timeout='5')
-    motion = Node(package='experiment_nav2', executable='odom_test',
+    motion = Node(package='experiment_cat', executable='odom_test',
                   parameters=[{'test': test}], output='screen')
     return [
         RegisterEventHandler(OnProcessExit(target_action=motion,

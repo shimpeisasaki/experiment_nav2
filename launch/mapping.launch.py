@@ -15,7 +15,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    share = FindPackageShare('experiment_nav2')
+    share = FindPackageShare('experiment_cat')
     base_share = FindPackageShare('cat_bringup')
     nav2_share = FindPackageShare('nav2_bringup')
     slam_share = FindPackageShare('slam_toolbox')

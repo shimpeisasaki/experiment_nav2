@@ -1,4 +1,4 @@
-# experiment_nav2
+# experiment_cat
 
 [日本語の操作ガイド](README.ja.md)
 
@@ -27,9 +27,9 @@ This does not connect to the motors:
 ```bash
 cd ~/ros2_ws
 source /opt/ros/humble/setup.bash
-colcon build --packages-select experiment_nav2 --symlink-install
+colcon build --packages-select experiment_cat --symlink-install
 source install/setup.bash
-ros2 launch experiment_nav2 visualize.launch.py
+ros2 launch experiment_cat visualize.launch.py
 ```
 
 RViz displays the measured chassis and wheels, the ZED Mini, the GNSS antenna,
@@ -45,9 +45,9 @@ The chassis underside is at 50 mm and its thickness is 140 mm (top: 190 mm).
 ```bash
 cd ~/ros2_ws
 source /opt/ros/humble/setup.bash
-colcon build --packages-select ddsm115_controller experiment_nav2 --symlink-install
+colcon build --packages-select ddsm115_controller experiment_cat --symlink-install
 source install/setup.bash
-ros2 launch experiment_nav2 bringup.launch.py
+ros2 launch experiment_cat bringup.launch.py
 ```
 
 This starts the motor driver, wheel odometry, robot_state_publisher, ZED Mini,
@@ -82,15 +82,15 @@ always available as `/dev/rplidar`, then launch the standalone scan viewer:
 
 ```bash
 sudo install -m 644 \
-  ~/ros2_ws/src/experiment_nav2/udev/99-experiment-rplidar.rules \
+  ~/ros2_ws/src/experiment_cat/udev/99-experiment-rplidar.rules \
   /etc/udev/rules.d/99-experiment-rplidar.rules
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=tty
 
 cd ~/ros2_ws
-colcon build --packages-select sllidar_ros2 experiment_nav2 --symlink-install
+colcon build --packages-select sllidar_ros2 experiment_cat --symlink-install
 source install/setup.bash
-ros2 launch experiment_nav2 rplidar_s1.launch.py
+ros2 launch experiment_cat rplidar_s1.launch.py
 ```
 
 This starts only the LiDAR driver and RViz. It publishes `sensor_msgs/LaserScan`
@@ -107,10 +107,10 @@ seconds, and exits automatically. The expected physical count is 15 revolutions.
 Run all four directions separately:
 
 ```bash
-ros2 launch experiment_nav2 motor_rpm_calibration.launch.py motor:=right direction:=forward
-ros2 launch experiment_nav2 motor_rpm_calibration.launch.py motor:=right direction:=reverse
-ros2 launch experiment_nav2 motor_rpm_calibration.launch.py motor:=left  direction:=forward
-ros2 launch experiment_nav2 motor_rpm_calibration.launch.py motor:=left  direction:=reverse
+ros2 launch experiment_cat motor_rpm_calibration.launch.py motor:=right direction:=forward
+ros2 launch experiment_cat motor_rpm_calibration.launch.py motor:=right direction:=reverse
+ros2 launch experiment_cat motor_rpm_calibration.launch.py motor:=left  direction:=forward
+ros2 launch experiment_cat motor_rpm_calibration.launch.py motor:=left  direction:=reverse
 ```
 
 Count complete revolutions plus the final fraction of a revolution between the
@@ -130,11 +130,11 @@ must be discovered before the ten-second pre-motion countdown. No joystick is
 started. Motors must be in drive mode, with wheels on the ground.
 
 ```bash
-ros2 launch experiment_nav2 odom_tests.launch.py test:=straight
-ros2 launch experiment_nav2 odom_tests.launch.py test:=straight_12m
-ros2 launch experiment_nav2 odom_tests.launch.py test:=left_arc
-ros2 launch experiment_nav2 odom_tests.launch.py test:=right_arc
-ros2 launch experiment_nav2 odom_tests.launch.py test:=spin
+ros2 launch experiment_cat odom_tests.launch.py test:=straight
+ros2 launch experiment_cat odom_tests.launch.py test:=straight_12m
+ros2 launch experiment_cat odom_tests.launch.py test:=left_arc
+ros2 launch experiment_cat odom_tests.launch.py test:=right_arc
+ros2 launch experiment_cat odom_tests.launch.py test:=spin
 ```
 
 Run separately, measuring and repositioning between tests. `straight` is 3 m
@@ -165,20 +165,20 @@ stops the rosbag and base. Pass `use_zed:=false` only for a base-only diagnostic
 
 ```bash
 # Straight test: 0.3 m/s target for 10 s (measure the actual total travel).
-ros2 launch experiment_nav2 odom_calibration.launch.py bag_name:=straight_01
+ros2 launch experiment_cat odom_calibration.launch.py bag_name:=straight_01
 
 # Left/right arcs: 1 m target radius before velocity smoothing.
-ros2 launch experiment_nav2 odom_calibration.launch.py \
+ros2 launch experiment_cat odom_calibration.launch.py \
   angular_speed:=0.3 bag_name:=arc_left_01
-ros2 launch experiment_nav2 odom_calibration.launch.py \
+ros2 launch experiment_cat odom_calibration.launch.py \
   angular_speed:=-0.3 bag_name:=arc_right_01
 
 # One nominal in-place revolution at 0.5 rad/s
-ros2 launch experiment_nav2 odom_calibration.launch.py \
+ros2 launch experiment_cat odom_calibration.launch.py \
   linear_speed:=0.0 angular_speed:=0.5 duration:=12.57 bag_name:=spin_left_01
 
 # Hand-push inspection: in another terminal, first enable freewheel with the service below.
-ros2 launch experiment_nav2 odom_calibration.launch.py \
+ros2 launch experiment_cat odom_calibration.launch.py \
   linear_speed:=0.0 angular_speed:=0.0 duration:=0 bag_name:=hand_push_01
 
 # In a second terminal, after the launch starts:
@@ -213,7 +213,7 @@ or SLAM. Recording starts automatically; there is no automatic driving.
 cd ~/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 launch experiment_nav2 manual_loop_test.launch.py
+ros2 launch experiment_cat manual_loop_test.launch.py
 ```
 
 Before moving, wait for `Recording...`, then check actual messages in a second
@@ -248,7 +248,7 @@ Start SLAM first, using recorded time and the existing robot-specific parameters
 
 ```bash
 ros2 launch slam_toolbox online_sync_launch.py use_sim_time:=true \
-  slam_params_file:=/home/uedalab/ros2_ws/src/experiment_nav2/config/slam_toolbox.yaml
+  slam_params_file:=/home/uedalab/ros2_ws/src/experiment_cat/config/slam_toolbox.yaml
 ```
 
 In a second terminal, replace `BAG_DIRECTORY` with the saved bag path:
@@ -347,8 +347,8 @@ it alongside bringup/mapping/navigation. Gyro covariance floor is initially
 0.0004 (rad/s)^2; tune using stationary and motion measurements.
 
 Synthetic regression (no hardware; use the same isolated ROS_DOMAIN_ID for both):
-start `ros2 launch experiment_nav2 ekf.launch.py`, then run
-`python3 src/experiment_nav2/test/check_ekf_fallback.py` in another terminal.
+start `ros2 launch experiment_cat ekf.launch.py`, then run
+`python3 src/experiment_cat/test/check_ekf_fallback.py` in another terminal.
 
 ## Navigation TF ownership
 
@@ -367,9 +367,9 @@ cloud topic is `/zed/zed_node/point_cloud/cloud_registered`.
 ```bash
 cd ~/ros2_ws
 source /opt/ros/humble/setup.bash
-colcon build --packages-select experiment_nav2 --symlink-install
+colcon build --packages-select experiment_cat --symlink-install
 source install/setup.bash
-ros2 launch experiment_nav2 navigation.launch.py
+ros2 launch experiment_cat navigation.launch.py
 ```
 
 The default is mapping mode (`slam:=true`): it starts the base, robot model,
@@ -386,14 +386,14 @@ Save a completed map:
 ros2 run nav2_map_server map_saver_cli -f ~/ros2_ws/maps/site_01
 ```
 
-For normal navigation on a saved map, use AMCL instead of SLAM:
+For normal navigation on a saved map, use emcl2 instead of SLAM:
 
 ```bash
-ros2 launch experiment_nav2 navigation.launch.py \
+ros2 launch experiment_cat navigation.launch.py \
   slam:=false map:=~/ros2_ws/maps/site_01.yaml
 ```
 
-In AMCL mode, set the robot's approximate pose in RViz before giving a goal.
+In emcl2 mode, set the robot's approximate pose in RViz before giving a goal.
 To use an adjusted motor configuration in either mode, add
 `robot_config:=/absolute/path/to/robot.yaml`.
 
@@ -407,7 +407,7 @@ there is exactly one publisher of `/cmd_vel`.
 ```bash
 cd ~/ros2_ws
 source install/setup.bash
-ros2 launch experiment_nav2 mapping.launch.py
+ros2 launch experiment_cat mapping.launch.py
 ```
 
 Use the F710 controls already configured for manual drive: the right stick

@@ -2,7 +2,7 @@
 
 With ``slam:=true`` (the default), slam_toolbox publishes map -> odom while
 building a map. With ``slam:=false``, pass a saved map YAML path and Nav2
-starts map_server + AMCL instead. In both cases this launch owns the base,
+starts map_server + emcl2 instead. In both cases this launch owns the base,
 robot description, and RPLIDAR S1; do not start those nodes separately.
 """
 
@@ -17,7 +17,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    share = FindPackageShare('experiment_nav2')
+    share = FindPackageShare('experiment_cat')
     base_share = FindPackageShare('cat_bringup')
     nav2_share = FindPackageShare('nav2_bringup')
     slam_share = FindPackageShare('slam_toolbox')
@@ -39,6 +39,8 @@ def generate_launch_description():
             'map', default_value='',
             description='Saved map YAML. Required when slam:=false.'),
         DeclareLaunchArgument('serial_port', default_value='/dev/rplidar'),
+        DeclareLaunchArgument('localization_params_file', default_value=PathJoinSubstitution([
+            share, 'config', 'emcl2.yaml'])),
         DeclareLaunchArgument(
             'params_file',
             default_value=PathJoinSubstitution([share, 'config', 'nav2_params.yaml'])),
@@ -65,7 +67,7 @@ def generate_launch_description():
             respawn=True, respawn_delay=2.0),
         Node(package='joy', executable='joy_node', name='joy_node', output='screen',
              parameters=[{'autorepeat_rate': 20.0}]),
-        Node(package='experiment_nav2', executable='navigation_safety',
+        Node(package='experiment_cat', executable='navigation_safety',
              name='navigation_safety', output='screen'),
         Node(package='ddsm115_controller', executable='curvature_teleop',
              name='curvature_teleop', output='screen',
@@ -122,7 +124,7 @@ def generate_launch_description():
         Node(
             package='rviz2', executable='rviz2', name='nav2_rviz', output='screen',
             arguments=['-d', PathJoinSubstitution([
-                nav2_share, 'rviz', 'nav2_default_view.rviz'])],
+                share, 'rviz', 'navigation.rviz'])],
             condition=IfCondition(LaunchConfiguration('rviz'))),
 
         # Mapping mode: slam_toolbox supplies map -> odom, then Nav2 supplies
@@ -138,7 +140,6 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
                 nav2_share, 'launch', 'navigation_launch.py'])),
-            condition=IfCondition(slam),
             launch_arguments={
                 'use_sim_time': 'false',
                 'autostart': 'true',
@@ -146,17 +147,14 @@ def generate_launch_description():
                 'use_composition': 'False',
             }.items()),
 
-        # Saved-map mode: AMCL is the sole owner of map -> odom.
+        # Saved-map mode: emcl2 is the sole owner of map -> odom.
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([
-                nav2_share, 'launch', 'bringup_launch.py'])),
+                share, 'launch', 'localization.launch.py'])),
             condition=UnlessCondition(slam),
             launch_arguments={
-                'slam': 'False',
                 'map': LaunchConfiguration('map'),
                 'use_sim_time': 'false',
-                'autostart': 'true',
-                'params_file': params_file,
-                'use_composition': 'False',
+                'localization_params_file': LaunchConfiguration('localization_params_file'),
             }.items()),
     ])
