@@ -9,6 +9,7 @@ emcl2:
     laser_min_range: 0.1
     laser_max_range: 40.0
     scan_increment: 5
+    scan_max_age: 0.3  # seconds from first ray acquisition; reject older scans
     initial_pose_x: 0.0
     initial_pose_y: 0.0
     initial_pose_a: 0.0

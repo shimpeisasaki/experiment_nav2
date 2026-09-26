@@ -28,6 +28,12 @@ class NavigationSafety(Node):
         self.y = self.declare_parameter('free_button', 3).value
         self.a = self.declare_parameter('navigation_button', 0).value
         self.x = self.declare_parameter('manual_button', 2).value
+        self.scan_max_age = self.declare_parameter('scan_max_age', 0.3).value
+        self.scan_timeout = self.declare_parameter('scan_timeout', 0.5).value
+        self.scan_frame = self.declare_parameter('scan_frame', 'laser').value
+        if not all(math.isfinite(v) and v > 0 for v in
+                   (self.scan_max_age, self.scan_timeout)):
+            raise ValueError('scan_max_age and scan_timeout must be finite and positive')
         self.mode = 0
         self.drive_source = 'navigation'
         self.pending_drive = None
@@ -79,10 +85,10 @@ class NavigationSafety(Node):
     def goal_status(self, name, msg):
         self.active[name] = any(s.status in (1, 2, 3) for s in msg.status_list)
 
-    def header_ok(self, key, header):
+    def header_ok(self, key, header, max_age=.5):
         t = header.stamp.sec + header.stamp.nanosec*1e-9
         now = self.get_clock().now().nanoseconds*1e-9
-        if not -.1 <= now-t <= .5 or t <= self.stamps.get(key, -math.inf):
+        if t <= 0 or not -.1 <= now-t <= max_age or t <= self.stamps.get(key, -math.inf):
             return False
         self.stamps[key] = t
         self.fresh[key] = time.monotonic()
@@ -96,8 +102,16 @@ class NavigationSafety(Node):
             self.header_ok('odom', msg.header)
 
     def scan(self, msg):
-        if any(math.isfinite(v) and msg.range_min <= v <= msg.range_max for v in msg.ranges):
-            self.header_ok('scan', msg.header)
+        if (msg.header.frame_id == self.scan_frame and
+                any(math.isfinite(v) and msg.range_min <= v <= msg.range_max for v in msg.ranges)):
+            self.header_ok('scan', msg.header, self.scan_max_age)
+
+    def sensor_problem(self):
+        now = time.monotonic()
+        for key, limit in (('odom', .5), ('scan', self.scan_timeout)):
+            if now-self.fresh.get(key, -math.inf) > limit:
+                return key+' stale/missing/invalid'
+        return None
 
     def feedback(self, msg):
         if len(msg.data) >= 2 and all(v != -32768 for v in msg.data[:2]):
@@ -197,10 +211,9 @@ class NavigationSafety(Node):
             publishers = self.get_publishers_info_by_topic(topic)
             if len(publishers) != 1 or publishers[0].node_name != owner:
                 return 'Unexpected/missing publisher: '+topic
-        now = time.monotonic()
-        for key in ('odom', 'scan'):
-            if now-self.fresh.get(key, -math.inf) > .5:
-                return key+' stale/missing/invalid'
+        issue = self.sensor_problem()
+        if issue:
+            return issue
         ros_now = self.get_clock().now().nanoseconds*1e-9
         for parent, child, tolerance in (('odom', 'base_link', .5), ('map', 'odom', 1.5)):
             try:

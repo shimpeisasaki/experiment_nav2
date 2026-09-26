@@ -23,6 +23,14 @@ ros2 launch experiment_cat localization.launch.py map:=$HOME/ros2_ws/indoor_loop
 ```
 
 設定は`config/emcl2.yaml`（`localization_params_file:=絶対パス`で変更可能）。
+
+### LiDAR瞬停時の保護
+
+- `/scan`はBest Effort。emcl2は`scan_max_age: 0.3`秒より古いスキャンを破棄し、保持中のスキャンも期限を超えたら推定更新に使いません。
+- `navigation_safety`も取得時刻・順序・フレーム・有効測距点を検査します。受信時の許容経過時間は`scan_max_age`（既定0.3秒）、有効スキャンの受信途絶は`scan_timeout`（既定0.5秒）です。
+- 途絶時はゼロ速度・ブレーキ指令を出して停止状態を保持します。正常復帰・静止が2秒続いた後、Aまたは`/navigation_safety/arm`で再許可してください。既存ゴールが再開する可能性があるため周囲を確認してください。
+- 全点NaN/Infのスキャンも安全側に無効扱いします。時間は最初の測距点が基準なので、1周の取得時間を含みます。しきい値は実機の遅延に合わせて調整してください。
+- この走行保護は`navigation.launch.py`の機能です。単体の`cat_bringup`や自己位置推定launchだけでは走行停止を保証しません。
 500粒子、odom更新30 Hz、scanは5点ごとに評価します。
 膨張リセットはalpha_threshold=0.5、位置半径0.1 m・姿勢半径0.2 radを初期値としています。
 `sensor_reset: false`は別のセンサリセット機能の設定で、膨張リセットの無効化ではありません。

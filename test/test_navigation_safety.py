@@ -8,7 +8,7 @@ import time
 import math
 import pytest
 from geometry_msgs.msg import Twist
-from sensor_msgs.msg import Joy
+from sensor_msgs.msg import Joy, LaserScan
 
 loader = SourceFileLoader('navigation_safety_impl', str(Path(__file__).parents[1]/'scripts/navigation_safety'))
 spec = importlib.util.spec_from_loader(loader.name, loader)
@@ -29,11 +29,66 @@ def subject():
              active={}, cancel_futures={}, rpm=[0, 0], last_tick=now,
              cancel_goals=Mock(), header_ok=lambda *args: True,
              ids=[1, 2], fresh={k: now for k in ('joy', 'rpm', 'online')})
+    obj.scan_max_age = .3
+    obj.scan_timeout = .5
+    obj.scan_frame = 'laser'
+    obj.stamps = {}
+    obj.sensor_problem = lambda: Safety.sensor_problem(obj)
     obj.stop = lambda reason: Safety.stop(obj, reason)
     obj.request_free = lambda: Safety.request_free(obj)
     obj.activate_drive = lambda source: Safety.activate_drive(obj, source)
     obj.request_drive = lambda source: Safety.request_drive(obj, source)
     return obj
+
+
+def scan_subject():
+    obj = subject()
+    obj.get_clock = lambda: NS(now=lambda: NS(nanoseconds=100_000_000_000))
+    obj.header_ok = lambda *args: Safety.header_ok(obj, *args)
+    msg = LaserScan()
+    msg.header.frame_id = 'laser'
+    msg.header.stamp.sec = 99
+    msg.header.stamp.nanosec = 900_000_000
+    msg.range_min, msg.range_max, msg.ranges = .1, 40., [1.]
+    return obj, msg
+
+
+def test_invalid_scans_do_not_refresh_watchdog():
+    obj, msg = scan_subject()
+    Safety.scan(obj, msg)
+    accepted = obj.fresh['scan']
+    # Repeated stamp, old data, future data, wrong frame, empty returns.
+    Safety.scan(obj, msg)
+    msg.header.stamp.sec = 98
+    Safety.scan(obj, msg)
+    msg.header.stamp.sec = 101
+    Safety.scan(obj, msg)
+    msg.header.stamp.sec = 100
+    msg.header.stamp.nanosec = 0
+    msg.header.frame_id = 'wrong'
+    Safety.scan(obj, msg)
+    msg.header.frame_id = 'laser'
+    msg.ranges = [float('nan')]
+    Safety.scan(obj, msg)
+    assert obj.fresh['scan'] == accepted
+
+
+def test_scan_loss_brakes_and_recovery_requires_rearm():
+    obj, msg = scan_subject()
+    Safety.scan(obj, msg)
+    obj.fresh['odom'] = time.monotonic()
+    obj.mode = 2
+    obj.problem = obj.sensor_problem
+    obj.fresh['scan'] -= .6
+    Safety.tick(obj)
+    assert obj.mode == 0 and 'scan' in obj.reason
+    assert obj.output.publish.call_args.args[0].linear.x == 0.
+    assert obj.lease.publish.call_args.args[0].data == 0
+    msg.header.stamp.sec = 100
+    msg.header.stamp.nanosec = 0
+    Safety.scan(obj, msg)
+    Safety.tick(obj)
+    assert obj.mode == 0 and obj.pending_drive is None
 
 
 def test_startup_zero_and_arm():
